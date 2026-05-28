@@ -1,0 +1,14 @@
+# OS / editor
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+*.swp
+*~
+
+# Local manifest (per-machine install state)
+.tokopt-vscode-manifest
+
+# Test workspace artifacts
+tmp/
+*.log
