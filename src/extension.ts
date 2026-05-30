@@ -3,6 +3,7 @@ import { TokoptCodeLensProvider } from "./codeLens.js";
 import { CountResult } from "./tokopt.js";
 import { CustomizationKind, classifyCustomizationFile } from "./customizationFiles.js";
 import { TokoptDiagnosticManager } from "./diagnostics.js";
+import { TokoptStatusBarManager } from "./statusBar.js";
 import { resetWarnings } from "./warnings.js";
 import {
   SLIM_FIXABLE,
@@ -51,6 +52,45 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const diagnostics = new TokoptDiagnosticManager(log);
   context.subscriptions.push(diagnostics);
+
+  const statusBar = new TokoptStatusBarManager(log);
+  context.subscriptions.push(statusBar);
+
+  // Watch the strict always-on locations for create/change/delete events
+  // outside of save-listener coverage (external edits, file deletions,
+  // git checkout flipping files in/out). Save events also fire here for
+  // internal edits — the debounce inside scheduleRefresh collapses both
+  // into a single refresh.
+  const watcher = vscode.workspace.createFileSystemWatcher(
+    TokoptStatusBarManager.watcherGlob()
+  );
+  context.subscriptions.push(watcher);
+  context.subscriptions.push(
+    watcher.onDidCreate((uri) => {
+      if (statusBar.isStrictAlwaysOnPath(uri.fsPath)) {
+        statusBar.scheduleRefresh();
+      }
+    }),
+    watcher.onDidChange((uri) => {
+      if (statusBar.isStrictAlwaysOnPath(uri.fsPath)) {
+        statusBar.scheduleRefresh();
+      }
+    }),
+    watcher.onDidDelete((uri) => {
+      if (statusBar.isStrictAlwaysOnPath(uri.fsPath)) {
+        statusBar.invalidate(uri.fsPath);
+        statusBar.scheduleRefresh();
+      }
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.workspace.onDidChangeWorkspaceFolders(() => {
+      statusBar.clearCache();
+      void statusBar.refresh();
+      void statusBar.updateCurrentFile();
+    })
+  );
 
   const slimPreview = new SlimPreviewContentProvider();
   context.subscriptions.push(slimPreview);
@@ -110,6 +150,22 @@ export function activate(context: vscode.ExtensionContext): void {
       ) {
         void diagnostics.refresh();
       }
+      // Status bar: only refresh the tax when the saved file is a strict
+      // always-on candidate — unrelated saves (e.g. foo.ts) must not
+      // invalidate the cache (would cancel in-flight scans by bumping
+      // generation) or trigger a wasted scan. Current-file appendix is
+      // recomputed unconditionally; it's cheap thanks to the mtime cache.
+      if (statusBar.isStrictAlwaysOnPath(doc.uri.fsPath)) {
+        statusBar.invalidate(doc.uri.fsPath);
+        statusBar.scheduleRefresh();
+      }
+      void statusBar.updateCurrentFile();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.window.onDidChangeActiveTextEditor((editor) => {
+      void statusBar.updateCurrentFile(editor);
     })
   );
 
@@ -128,11 +184,16 @@ export function activate(context: vscode.ExtensionContext): void {
       provider.clearCache();
       provider.refresh();
       void diagnostics.refresh();
+      statusBar.clearCache();
+      void statusBar.refresh();
+      void statusBar.updateCurrentFile();
     })
   );
 
   // Initial diagnostic scan on activation (best-effort; no blocking).
   void diagnostics.refresh();
+  void statusBar.refresh();
+  void statusBar.updateCurrentFile();
 
   // Click handler for the headline CodeLens.
   context.subscriptions.push(
@@ -170,6 +231,19 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("tokopt.clearDiagnostics", () => {
       diagnostics.clear();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tokopt.refreshStatusBar", () => {
+      statusBar.clearCache();
+      void statusBar.refresh();
+      void statusBar.updateCurrentFile();
+    })
+  );
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tokopt.showStatusBarBreakdown", () => {
+      statusBar.showBreakdown();
     })
   );
 
