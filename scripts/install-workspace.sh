@@ -19,30 +19,54 @@ SRC_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 
 usage() {
   cat <<EOF
-Usage: $(basename "$0") <target-repo-path> [--dry-run]
+Usage: $(basename "$0") [--dry-run] [<target-repo-path>]
 
 Copies tokopt-vscode .github/ assets into the target repo.
 
 Arguments:
-  <target-repo-path>   Path to the target repository (must contain .github/)
-  --dry-run            Print what would be copied without writing
+  <target-repo-path>   Path to the target repository (must contain .github/).
+                       Defaults to the current directory if omitted.
+  --dry-run            Print what would be copied without writing.
+  -h, --help           Show this help and exit.
 
-Example:
+Examples:
   $(basename "$0") ~/work/my-project
+  $(basename "$0") --dry-run ~/work/my-project
   $(basename "$0") ~/work/my-project --dry-run
+  $(basename "$0") --dry-run            # dry-run against current dir
 EOF
 }
 
-if [ $# -lt 1 ] || [ "${1:-}" = "-h" ] || [ "${1:-}" = "--help" ]; then
-  usage
-  exit 1
-fi
-
-TARGET="$1"
 DRY_RUN=0
-if [ "${2:-}" = "--dry-run" ]; then
-  DRY_RUN=1
-fi
+TARGET=""
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --dry-run)
+      DRY_RUN=1
+      shift
+      ;;
+    -h|--help)
+      usage
+      exit 0
+      ;;
+    --*)
+      echo "ERROR: unknown flag: $1" >&2
+      usage >&2
+      exit 2
+      ;;
+    *)
+      if [ -n "$TARGET" ]; then
+        echo "ERROR: multiple target paths specified: '$TARGET' and '$1'" >&2
+        exit 2
+      fi
+      TARGET="$1"
+      shift
+      ;;
+  esac
+done
+
+TARGET="${TARGET:-.}"
 
 if [ ! -d "$TARGET" ]; then
   echo "ERROR: target '$TARGET' does not exist or is not a directory" >&2

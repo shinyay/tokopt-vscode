@@ -106,3 +106,31 @@ else
   echo
   echo "[dry-run] No files modified. Would install ${#INSTALLED[@]} files."
 fi
+
+# --- tokopt CLI detection (post-install) ------------------------------------
+# The installed agents + skills are thin wrappers around the `tokopt` Go CLI.
+# Without the binary on PATH, every prompt and agent will fail at runtime
+# with "tokopt: command not found". Surface this NOW, not later in Chat.
+
+echo
+if command -v tokopt >/dev/null 2>&1; then
+  echo "✓ tokopt CLI detected: $(command -v tokopt) ($(tokopt --version 2>/dev/null || echo 'version unknown'))"
+elif [ -x "$HOME/go/bin/tokopt" ]; then
+  echo "⚠ tokopt CLI found at $HOME/go/bin/tokopt but NOT on PATH."
+  echo "  Add this to your shell rc to fix:"
+  echo "      export PATH=\"\$HOME/go/bin:\$PATH\""
+else
+  cat <<'HINT'
+⚠ tokopt CLI not detected. The installed agents + skills require it.
+
+Install in one line (recommended — pre-built binary):
+
+    curl -fsSL https://raw.githubusercontent.com/shinyay/tokopt/main/scripts/install.sh | sh
+
+Or build from source (requires Go ≥ 1.24):
+
+    go install github.com/shinyay/getting-started-with-token-optimization/tools/tokopt/cmd/tokopt@latest
+
+After install, verify with: tokopt --version
+HINT
+fi

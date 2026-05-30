@@ -4,6 +4,58 @@ All notable changes to **tokopt-vscode** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] — 2026-05-30
+
+Install-script polish release. Closes all remaining v0.1.x issues —
+**`tokopt-vscode` open issues = 0** after this release.
+
+### Fixed
+
+- **`install-workspace.sh --dry-run` argument parsing**: previously,
+  `--dry-run <target>` treated `--dry-run` as the target path because
+  the script only checked `$2` for the flag. v0.1.2 replaces the
+  ad-hoc handling with a flag-before-positional loop, so all of these
+  now work identically:
+
+  ```bash
+  install-workspace.sh --dry-run .
+  install-workspace.sh . --dry-run
+  install-workspace.sh --dry-run        # defaults to current dir
+  ```
+
+  Unknown flags now exit with code 2 and a clear error message;
+  `--help` exits 0 (was 1).
+  ([#5](https://github.com/shinyay/tokopt-vscode/issues/5))
+
+### Added
+
+- **`install-user.sh` post-install tokopt CLI detection**: the user
+  installer now ends with a 3-way detection block:
+  1. `command -v tokopt` → print path + version
+  2. else `~/go/bin/tokopt` exists → print PATH-fix hint
+  3. else → print actionable install hint with **both** the
+     recommended `curl | sh` from [`shinyay/tokopt`](https://github.com/shinyay/tokopt)
+     and the `go install` fallback
+
+  First-time installers no longer have to hit `tokopt: command not
+  found` mid-Chat-session to discover the prerequisite.
+  ([#3](https://github.com/shinyay/tokopt-vscode/issues/3))
+
+### Verification
+
+All acceptance criteria from #5 and #3 validated against a clean
+`/tmp/vsc-test/` workspace:
+
+| Test | Result |
+|---|---|
+| `install-workspace.sh --dry-run .` | ✅ dry-run output, no writes |
+| `install-workspace.sh . --dry-run` | ✅ identical |
+| `install-workspace.sh --dry-run` (no target) | ✅ defaults to `.` |
+| `install-workspace.sh --bogus .` | ✅ exit 2 + clear error |
+| `install-workspace.sh . /tmp` | ✅ exit 2 (multiple targets rejected) |
+| `install-workspace.sh --help` | ✅ exit 0 |
+| `install-user.sh --dry-run` | ✅ ends with `✓ tokopt CLI detected: /home/.../go/bin/tokopt` |
+
 ## [0.1.1] — 2026-05-30
 
 Bug-fix + UX-polish release. **v0.1.0 slash commands were non-functional
