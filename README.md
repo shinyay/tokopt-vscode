@@ -10,7 +10,7 @@ Two complementary install surfaces — pick either, or both:
 
 | Surface | What you get | Best for |
 |---|---|---|
-| **`.vsix` extension** (v0.2.0+) | Inline CodeLens showing per-file token cost on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md` | Editing customization files — see cost ambiently |
+| **`.vsix` extension** (v0.2.0+) | Inline CodeLens (per-file token cost) + Diagnostics (anti-pattern findings in Problems panel) on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md` | Editing customization files — see cost and anti-patterns ambiently |
 | **`scripts/install-*.sh`** (v0.1.x) | `.github/agents/`, `.github/skills/`, `.github/prompts/` assets for Copilot Chat | Running `@token-doctor` / `/token-audit` in Copilot Chat |
 
 Both rely on the same [`tokopt`](https://github.com/shinyay/tokopt) Go CLI for measurement.
@@ -54,11 +54,46 @@ Click the CodeLens for a breakdown plus suggested follow-up commands (`tokopt an
 | Setting | Default | Effect |
 |---|---|---|
 | `tokopt.codeLens.enabled` | `true` | Show / hide the CodeLens globally |
+| `tokopt.diagnostics.enabled` | `true` | Surface `tokopt detect` anti-pattern findings in the Problems panel |
 | `tokopt.binaryPath` | `"tokopt"` | Override if `tokopt` is not on `PATH` (use absolute path) |
 
 ### How it works under the hood
 
-The extension calls `tokopt count --format=json <file>` and dispatches strictly on the `format_version: "v1"` envelope ([upstream schema doc](https://github.com/shinyay/getting-started-with-token-optimization/blob/main/tools/tokopt/docs/cli-json-schema.md)). Anything other than `"v1"` triggers a one-time upgrade warning and silently disables CodeLens — a future `v2` schema will never crash the extension.
+The extension calls `tokopt count --format=json <file>` (for CodeLens) and `tokopt detect --format=json <workspace>` (for Diagnostics) and dispatches strictly on the `format_version: "v1"` envelope ([upstream schema doc](https://github.com/shinyay/getting-started-with-token-optimization/blob/main/tools/tokopt/docs/cli-json-schema.md)). Anything other than `"v1"` triggers a one-time upgrade warning and silently disables the affected feature — a future `v2` schema will never crash the extension.
+
+---
+
+## 🩺 The Diagnostics (`v0.3.0`)
+
+`tokopt detect` finds structural anti-patterns (kitchen-sink instruction files, format inflation, reasoning leakage, MCP overload, etc.) in customization assets. With v0.3.0, those findings show up in the **Problems panel** as you save:
+
+```
+.github/copilot-instructions.md
+  ⚠ Always-on instruction file is large — 604 tokens sent on every interaction.
+     Fix: Cut to the smallest set of rules that change behaviour. (~104 tokens saved) [Ch 14 #1]
+```
+
+Severities map as follows:
+
+| Finding severity | VS Code severity |
+|---|---|
+| `critical` | Error |
+| `high` | Error |
+| `warn` | Warning |
+| `info` | Information |
+
+Each diagnostic carries the finding ID as its `code` (e.g. `kitchen-sink-system-prompt`) and `"tokopt"` as its `source`, so you can filter the Problems panel by either.
+
+### Refresh model
+
+The provider re-runs `tokopt detect` against the workspace when:
+
+- the extension activates (initial scan, best-effort)
+- you save a recognised customization file (other saves are ignored)
+- you run **tokopt: Refresh Diagnostics** from the palette
+- you change any `tokopt.*` setting
+
+Run **tokopt: Clear Diagnostics** from the palette if you want to drop all findings temporarily (e.g. during a focused editing session). They'll be repopulated on the next save.
 
 ### Install the extension
 

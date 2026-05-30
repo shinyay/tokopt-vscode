@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
+import { warnBinaryMissing, warnVersionMismatch } from "./warnings.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -26,9 +27,6 @@ export type CountOutcome =
   | { kind: "binary-missing" }
   | { kind: "version-mismatch"; got: unknown }
   | { kind: "error"; message: string };
-
-let warnedBinaryMissing = false;
-let warnedVersionMismatch = false;
 
 function isErrnoException(e: unknown): e is NodeJS.ErrnoException {
   return typeof e === "object" && e !== null && "code" in e;
@@ -75,12 +73,7 @@ export async function runTokoptCount(
       log.appendLine(
         `tokopt format_version mismatch: extension supports "${SUPPORTED_FORMAT_VERSION}", got ${JSON.stringify(version)}`
       );
-      if (!warnedVersionMismatch) {
-        warnedVersionMismatch = true;
-        vscode.window.showWarningMessage(
-          `tokopt CodeLens disabled: tokopt CLI emits format_version=${JSON.stringify(version)} but this extension supports "${SUPPORTED_FORMAT_VERSION}". Update the extension to match.`
-        );
-      }
+      warnVersionMismatch(SUPPORTED_FORMAT_VERSION, version);
       return { kind: "version-mismatch", got: version };
     }
 
@@ -107,32 +100,11 @@ export async function runTokoptCount(
   } catch (err) {
     if (isErrnoException(err) && err.code === "ENOENT") {
       log.appendLine(`tokopt binary not found at "${binaryPath}"`);
-      if (!warnedBinaryMissing) {
-        warnedBinaryMissing = true;
-        const action = "Show install instructions";
-        vscode.window
-          .showInformationMessage(
-            `tokopt CLI not found. Token-cost CodeLens is disabled. Install: curl -fsSL https://raw.githubusercontent.com/shinyay/tokopt/main/scripts/install.sh | sh`,
-            action
-          )
-          .then((picked) => {
-            if (picked === action) {
-              vscode.env.openExternal(
-                vscode.Uri.parse("https://github.com/shinyay/tokopt#install")
-              );
-            }
-          });
-      }
+      warnBinaryMissing();
       return { kind: "binary-missing" };
     }
     const msg = `tokopt count failed: ${String(err)}`;
     log.appendLine(msg);
     return { kind: "error", message: msg };
   }
-}
-
-/** Reset the one-time warning latches. Exposed for tests. */
-export function resetWarnings(): void {
-  warnedBinaryMissing = false;
-  warnedVersionMismatch = false;
 }

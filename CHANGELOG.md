@@ -4,6 +4,65 @@ All notable changes to **tokopt-vscode** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0] — 2026-05-30
+
+Adds the **second consumer** of the `format_version: "v1"` envelope: an
+anti-pattern Diagnostic provider that surfaces `tokopt detect` findings
+in the VS Code Problems panel.
+
+### Added
+
+- **DiagnosticProvider** — runs `tokopt detect --format=json` against
+  each workspace folder and publishes findings to the Problems panel,
+  with the appropriate severity (`critical`/`high` → Error,
+  `warn` → Warning, `info` → Information). Each diagnostic carries the
+  finding `id` as its `code` and `"tokopt"` as its `source`, making them
+  filterable.
+  ([#8](https://github.com/shinyay/tokopt-vscode/issues/8))
+
+- **Refresh triggers**:
+  - extension activation (initial scan)
+  - file save (only when the saved file is a recognised customization
+    asset — avoids thrashing detect on unrelated edits)
+  - `tokopt.refreshDiagnostics` command (palette: *tokopt: Refresh Diagnostics*)
+  - configuration changes under `tokopt.*`
+
+- **Commands**:
+  - `tokopt.refreshDiagnostics` — manual rescan
+  - `tokopt.clearDiagnostics` — drop all published diagnostics
+
+- **Setting**:
+  - `tokopt.diagnostics.enabled` (default `true`) — turn the provider off
+    without uninstalling
+
+- **Shared one-time warning latches** (`src/warnings.ts`) — both
+  CodeLens and Diagnostics now route their "binary missing" and
+  "format_version mismatch" notifications through the same module, so a
+  user sees each warning at most once per session even when both
+  features run.
+
+### Changed
+
+- Bundle: 5.6 KB → 9.6 KB (added detect/diagnostics modules)
+- `.vsix`: 12 KB → 15 KB
+- Extended `activationEvents` — extension now activates eagerly when a
+  workspace contains any of `**/.github/copilot-instructions.md`,
+  `**/copilot-instructions.md`, `**/*.agent.md`, `**/SKILL.md`. CodeLens
+  still relies on the original `onLanguage:markdown` activation; the new
+  events ensure the initial diagnostic scan runs without waiting for the
+  user to open a markdown file first.
+
+### Notes
+
+- Findings are anchored to line 0 of each file. `tokopt detect` reports
+  file-level findings (no line numbers), so this matches the data shape
+  rather than guessing.
+- Detectors that aggregate across multiple files (e.g. MCP overload)
+  emit free-form location strings that aren't real paths. Those
+  findings are silently skipped for now — they're better surfaced via
+  the existing terminal output. A future enhancement could route them
+  to a dedicated Output channel.
+
 ## [0.2.0] — 2026-05-30
 
 First **real VS Code extension** release. Until now, `tokopt-vscode` shipped

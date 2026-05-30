@@ -1,8 +1,8 @@
 {
   "name": "tokopt-vscode",
   "displayName": "tokopt — Token Optimization for Copilot",
-  "description": "Inline token-cost CodeLens on Copilot customization files (instructions, agents, skills).",
-  "version": "0.2.0",
+  "description": "Token-cost CodeLens + anti-pattern Diagnostics for Copilot customization files (instructions, agents, skills).",
+  "version": "0.3.0",
   "publisher": "shinyay",
   "license": "MIT",
   "repository": {
@@ -22,6 +22,7 @@
     "token",
     "optimization",
     "codelens",
+    "diagnostics",
     "tokopt"
   ],
   "engines": {
@@ -29,7 +30,14 @@
   },
   "main": "./out/extension.js",
   "activationEvents": [
-    "onLanguage:markdown"
+    "onLanguage:markdown",
+    "workspaceContains:**/.github/copilot-instructions.md",
+    "workspaceContains:**/copilot-instructions.md",
+    "workspaceContains:**/instructions.md",
+    "workspaceContains:**/*.agent.md",
+    "workspaceContains:**/*.chatmode.md",
+    "workspaceContains:**/*.prompt.md",
+    "workspaceContains:**/SKILL.md"
   ],
   "contributes": {
     "configuration": {
@@ -40,13 +48,28 @@
           "default": true,
           "description": "Show inline token-cost CodeLens on Copilot customization files."
         },
+        "tokopt.diagnostics.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Surface tokopt detect anti-pattern findings in the Problems panel. Refreshes on save of any customization file."
+        },
         "tokopt.binaryPath": {
           "type": "string",
           "default": "tokopt",
           "description": "Path to the tokopt binary. Use 'tokopt' to resolve from PATH, or an absolute path."
         }
       }
-    }
+    },
+    "commands": [
+      {
+        "command": "tokopt.refreshDiagnostics",
+        "title": "tokopt: Refresh Diagnostics"
+      },
+      {
+        "command": "tokopt.clearDiagnostics",
+        "title": "tokopt: Clear Diagnostics"
+      }
+    ]
   },
   "scripts": {
     "build": "node esbuild.mjs",
