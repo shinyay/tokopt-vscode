@@ -2,8 +2,45 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { Finding, FindingSeverity, runTokoptDetect } from "./detect.js";
+import { isSuppressionSupported, parseSuppressions } from "./suppressions.js";
 
 const SOURCE = "tokopt";
+
+/**
+ * Lookup `<!-- tokopt:disable=<id> -->` markers in a file's text, with a
+ * cache that lives for the duration of a single `runOnce` so we never
+ * re-read the same file for findings that target it multiple times.
+ *
+ * Reads are best-effort: any I/O failure logs once and returns an empty
+ * suppression set (fail-open — visibility beats silent muting on errors).
+ */
+function suppressionsFor(
+  absPath: string,
+  cache: Map<string, Set<string>>,
+  log: vscode.OutputChannel
+): Set<string> {
+  const hit = cache.get(absPath);
+  if (hit) {
+    return hit;
+  }
+  if (!isSuppressionSupported(absPath)) {
+    const empty = new Set<string>();
+    cache.set(absPath, empty);
+    return empty;
+  }
+  let parsed: Set<string>;
+  try {
+    const content = fs.readFileSync(absPath, "utf8");
+    parsed = parseSuppressions(content);
+  } catch (err) {
+    log.appendLine(
+      `tokopt: failed to read suppressions from ${absPath}: ${String(err)}`
+    );
+    parsed = new Set<string>();
+  }
+  cache.set(absPath, parsed);
+  return parsed;
+}
 
 /**
  * Resolve a detect finding's `location` to an absolute path WITHIN the
@@ -105,6 +142,18 @@ export class TokoptDiagnosticManager implements vscode.Disposable {
     this.collection.dispose();
   }
 
+  /**
+   * Whether any tokopt diagnostic is currently published for `uri`. Used
+   * by the save listener so that a save which clears (via suppression) or
+   * mutates (via slim apply) an already-flagged file always re-scans,
+   * even when the file's path doesn't match the customization predicate
+   * (e.g. an arbitrary markdown file flagged by a future rule).
+   */
+  hasDiagnosticsFor(uri: vscode.Uri): boolean {
+    const arr = this.collection.get(uri);
+    return !!arr && arr.length > 0;
+  }
+
   /** Trigger a workspace-wide rescan. Coalesces concurrent calls. */
   async refresh(): Promise<void> {
     if (this.refreshing) {
@@ -151,6 +200,10 @@ export class TokoptDiagnosticManager implements vscode.Disposable {
     // This avoids the Problems panel flickering empty for the 30s a slow
     // scan can take, and lets us bail cleanly if our generation is stale.
     const pending = new Map<string, vscode.Diagnostic[]>();
+    // Per-file suppression cache, scoped to this single runOnce so
+    // subsequent refreshes pick up new `<!-- tokopt:disable=... -->`
+    // markers without staleness.
+    const suppressionCache = new Map<string, Set<string>>();
 
     for (const folder of folders) {
       const rootFs = folder.uri.fsPath;
@@ -172,6 +225,10 @@ export class TokoptDiagnosticManager implements vscode.Disposable {
           this.log.appendLine(
             `tokopt detect: skipping finding with non-file location ${JSON.stringify(f.location)} (id=${f.id})`
           );
+          continue;
+        }
+        const suppressed = suppressionsFor(absPath, suppressionCache, this.log);
+        if (suppressed.has(f.id)) {
           continue;
         }
         const uri = vscode.Uri.file(absPath).toString();

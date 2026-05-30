@@ -4,6 +4,43 @@ import { CountResult } from "./tokopt.js";
 import { CustomizationKind, classifyCustomizationFile } from "./customizationFiles.js";
 import { TokoptDiagnosticManager } from "./diagnostics.js";
 import { resetWarnings } from "./warnings.js";
+import {
+  SLIM_FIXABLE,
+  TokoptCodeActionProvider,
+  learnMoreUrl,
+} from "./codeActions.js";
+import { SlimPreviewContentProvider } from "./slimPreview.js";
+import { runTokoptSlim } from "./slim.js";
+import { formatSuppressionComment } from "./suppressions.js";
+
+function resolveBinary(): string {
+  const config = vscode.workspace.getConfiguration("tokopt");
+  return config.get<string>("binaryPath", "tokopt") || "tokopt";
+}
+
+/**
+ * Defense-in-depth check matching the SLIM_FIXABLE allow-list semantics.
+ * The CodeActionProvider only offers Apply/Preview when a SLIM_FIXABLE
+ * diagnostic is present (all 3 of which target markdown). This guard
+ * makes the same constraint hold for any programmatic invocation of
+ * `tokopt.applySlim` / `tokopt.previewSlim` (e.g. keybinding, another
+ * extension calling executeCommand) so that a JSON / YAML MCP config
+ * cannot be silently rewritten through TonForm.
+ */
+function isSlimSafeTarget(doc: vscode.TextDocument): boolean {
+  if (doc.languageId === "markdown") {
+    return true;
+  }
+  const lower = doc.uri.fsPath.toLowerCase();
+  return lower.endsWith(".md") || lower.endsWith(".markdown");
+}
+
+/**
+ * Per-URI in-flight tracker for applySlim/previewSlim. A second click on
+ * the same file while a slim run is in flight is silently ignored — we
+ * don't want two replace-whole-buffer edits racing each other.
+ */
+const slimInFlight = new Set<string>();
 
 export function activate(context: vscode.ExtensionContext): void {
   const log = vscode.window.createOutputChannel("tokopt");
@@ -15,12 +52,40 @@ export function activate(context: vscode.ExtensionContext): void {
   const diagnostics = new TokoptDiagnosticManager(log);
   context.subscriptions.push(diagnostics);
 
+  const slimPreview = new SlimPreviewContentProvider();
+  context.subscriptions.push(slimPreview);
+  context.subscriptions.push(
+    vscode.workspace.registerTextDocumentContentProvider(
+      SlimPreviewContentProvider.scheme,
+      slimPreview
+    )
+  );
+
   // Markdown selector — provider does its own path-based filtering inside.
-  const selector: vscode.DocumentSelector = [
+  const codeLensSelector: vscode.DocumentSelector = [
     { language: "markdown", scheme: "file" },
   ];
   context.subscriptions.push(
-    vscode.languages.registerCodeLensProvider(selector, provider)
+    vscode.languages.registerCodeLensProvider(codeLensSelector, provider)
+  );
+
+  // Quick-Fix provider deliberately covers markdown + json + yaml because
+  // detect findings target all three (markdown for instructions/agents,
+  // json/yaml for MCP config). The provider itself only returns actions
+  // when context.diagnostics contains a `source === "tokopt"` entry, so
+  // there's no per-file gating to think about — the data does the work.
+  const codeActionSelector: vscode.DocumentSelector = [
+    { language: "markdown", scheme: "file" },
+    { language: "json", scheme: "file" },
+    { language: "jsonc", scheme: "file" },
+    { language: "yaml", scheme: "file" },
+  ];
+  context.subscriptions.push(
+    vscode.languages.registerCodeActionsProvider(
+      codeActionSelector,
+      new TokoptCodeActionProvider(),
+      { providedCodeActionKinds: TokoptCodeActionProvider.providedCodeActionKinds }
+    )
   );
 
   // Refresh on save:
@@ -32,7 +97,17 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.workspace.onDidSaveTextDocument((doc) => {
       provider.invalidate(doc.uri);
       provider.refresh();
-      if (classifyCustomizationFile(doc.uri.fsPath)) {
+      // Refresh diagnostics when EITHER the file is a recognised
+      // customization asset OR it currently has tokopt diagnostics
+      // published. The second clause catches:
+      //   • files flagged by a rule whose target isn't (yet) in
+      //     classifyCustomizationFile,
+      //   • suppression edits (the user just added <!-- tokopt:disable=… -->),
+      //   • slim-apply edits that should drop or reshape existing findings.
+      if (
+        classifyCustomizationFile(doc.uri.fsPath) ||
+        diagnostics.hasDiagnosticsFor(doc.uri)
+      ) {
         void diagnostics.refresh();
       }
     })
@@ -98,12 +173,241 @@ export function activate(context: vscode.ExtensionContext): void {
     })
   );
 
+  // Quick-Fix commands.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "tokopt.applySlim",
+      async (uri?: vscode.Uri) => {
+        const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+        if (!target) {
+          vscode.window.showWarningMessage(
+            "tokopt: no file selected for Apply slim."
+          );
+          return;
+        }
+        await applySlim(target, log);
+        // The post-apply file is in-memory (not saved). Save listener will
+        // refresh diagnostics once the user persists the edit.
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "tokopt.previewSlim",
+      async (uri?: vscode.Uri) => {
+        const target = uri ?? vscode.window.activeTextEditor?.document.uri;
+        if (!target) {
+          vscode.window.showWarningMessage(
+            "tokopt: no file selected for Preview slim."
+          );
+          return;
+        }
+        await previewSlim(target, slimPreview, log);
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "tokopt.suppressFinding",
+      async (uri?: vscode.Uri, id?: string) => {
+        if (!uri || !id) {
+          vscode.window.showWarningMessage(
+            "tokopt: suppress action invoked without a finding."
+          );
+          return;
+        }
+        await suppressFinding(uri, id);
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "tokopt.learnMore",
+      async (_id?: string) => {
+        await vscode.env.openExternal(vscode.Uri.parse(learnMoreUrl()));
+      }
+    )
+  );
+
   log.appendLine(
     `tokopt-vscode activated (CodeLens enabled: ${vscode.workspace
       .getConfiguration("tokopt")
       .get<boolean>("codeLens.enabled", true)}, Diagnostics enabled: ${vscode.workspace
       .getConfiguration("tokopt")
-      .get<boolean>("diagnostics.enabled", true)})`
+      .get<boolean>("diagnostics.enabled", true)}, Quick Fix: ${SLIM_FIXABLE.size} slim-fixable rule(s) registered)`
+  );
+}
+
+/**
+ * Run slim on the on-disk version of `uri` and replace the editor buffer
+ * with the compressed content as a single, undoable WorkspaceEdit. Refuses
+ * to overwrite an unsaved buffer — the user is prompted to save first so
+ * slim runs against the bytes they intend to ship. Aborts if the buffer
+ * changes between save and edit-application (race detection).
+ */
+async function applySlim(
+  uri: vscode.Uri,
+  log: vscode.OutputChannel
+): Promise<void> {
+  const key = uri.toString();
+  if (slimInFlight.has(key)) {
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument(uri);
+  if (!isSlimSafeTarget(doc)) {
+    vscode.window.showWarningMessage(
+      `tokopt slim only operates on markdown files. ${doc.languageId} files are not slim-safe (would route through TonForm and may break valid config).`
+    );
+    return;
+  }
+  if (doc.isDirty) {
+    const pick = await vscode.window.showWarningMessage(
+      "tokopt slim runs on the saved file. Save this file before applying?",
+      { modal: true },
+      "Save and apply",
+      "Cancel"
+    );
+    if (pick !== "Save and apply") {
+      return;
+    }
+    const saved = await doc.save();
+    if (!saved) {
+      return;
+    }
+  }
+
+  // Snapshot the buffer state we just slim'd against. If the user types
+  // into the document during the async slim run, applying the whole-buffer
+  // replace would silently discard their edits.
+  const baselineVersion = doc.version;
+
+  slimInFlight.add(key);
+  let slim;
+  try {
+    slim = await runTokoptSlim(resolveBinary(), uri.fsPath, log);
+  } finally {
+    slimInFlight.delete(key);
+  }
+  if (slim.kind !== "ok") {
+    if (slim.kind === "error") {
+      vscode.window.showErrorMessage(
+        `tokopt slim failed (see "tokopt" output channel for details).`
+      );
+    }
+    return;
+  }
+  if (slim.savedTokens <= 0 || slim.compressed === doc.getText()) {
+    vscode.window.showInformationMessage(
+      "tokopt slim found no mechanical savings for this file. Consider restructuring instead."
+    );
+    return;
+  }
+  if (doc.version !== baselineVersion) {
+    vscode.window.showWarningMessage(
+      "tokopt: file was edited while slim was running. Re-run Apply slim to apply against the current buffer."
+    );
+    return;
+  }
+
+  const fullRange = new vscode.Range(
+    doc.positionAt(0),
+    doc.positionAt(doc.getText().length)
+  );
+  const edit = new vscode.WorkspaceEdit();
+  edit.replace(uri, fullRange, slim.compressed);
+  const applied = await vscode.workspace.applyEdit(edit);
+  if (!applied) {
+    vscode.window.showErrorMessage(
+      "tokopt: workspace edit refused; file may be read-only."
+    );
+    return;
+  }
+  vscode.window.showInformationMessage(
+    `tokopt slim: -${slim.savedTokens} tokens (${slim.savedPercent.toFixed(1)}%). Mechanical compression only — structural findings may persist.`
+  );
+}
+
+async function previewSlim(
+  uri: vscode.Uri,
+  preview: SlimPreviewContentProvider,
+  log: vscode.OutputChannel
+): Promise<void> {
+  const key = uri.toString();
+  if (slimInFlight.has(key)) {
+    return;
+  }
+  const doc = await vscode.workspace.openTextDocument(uri);
+  if (!isSlimSafeTarget(doc)) {
+    vscode.window.showWarningMessage(
+      `tokopt slim only operates on markdown files. ${doc.languageId} files are not slim-safe (would route through TonForm and may break valid config).`
+    );
+    return;
+  }
+  if (doc.isDirty) {
+    const pick = await vscode.window.showWarningMessage(
+      "tokopt slim runs on the saved file. Save this file before previewing?",
+      { modal: true },
+      "Save and preview",
+      "Cancel"
+    );
+    if (pick !== "Save and preview") {
+      return;
+    }
+    const saved = await doc.save();
+    if (!saved) {
+      return;
+    }
+  }
+
+  slimInFlight.add(key);
+  let slim;
+  try {
+    slim = await runTokoptSlim(resolveBinary(), uri.fsPath, log);
+  } finally {
+    slimInFlight.delete(key);
+  }
+  if (slim.kind !== "ok") {
+    if (slim.kind === "error") {
+      vscode.window.showErrorMessage(
+        `tokopt slim failed (see "tokopt" output channel for details).`
+      );
+    }
+    return;
+  }
+  const virtual = preview.publish(uri, slim.compressed);
+  const filename = uri.fsPath.split(/[\\/]/).pop() ?? uri.fsPath;
+  await vscode.commands.executeCommand(
+    "vscode.diff",
+    uri,
+    virtual,
+    `${filename} ↔ tokopt slim (-${slim.savedTokens} tokens, ${slim.savedPercent.toFixed(1)}%)`,
+    { preview: true }
+  );
+}
+
+/**
+ * Append `<!-- tokopt:disable=<id> -->` to the document via an in-memory
+ * WorkspaceEdit. We do NOT auto-save — saving here would silently persist
+ * any unrelated unsaved edits the user already had in the buffer. The
+ * suppression takes effect on the user's next Cmd+S (or its equivalent).
+ */
+async function suppressFinding(uri: vscode.Uri, id: string): Promise<void> {
+  const doc = await vscode.workspace.openTextDocument(uri);
+  const insertAt = doc.positionAt(doc.getText().length);
+  const edit = new vscode.WorkspaceEdit();
+  edit.insert(uri, insertAt, formatSuppressionComment(id));
+  const applied = await vscode.workspace.applyEdit(edit);
+  if (!applied) {
+    vscode.window.showErrorMessage(
+      "tokopt: could not insert suppression comment."
+    );
+    return;
+  }
+  vscode.window.showInformationMessage(
+    `tokopt: added suppression for "${id}". Save the file to clear the diagnostic.`
   );
 }
 

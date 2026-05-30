@@ -10,7 +10,7 @@ Two complementary install surfaces — pick either, or both:
 
 | Surface | What you get | Best for |
 |---|---|---|
-| **`.vsix` extension** (v0.2.0+) | Inline CodeLens (per-file token cost) + Diagnostics (anti-pattern findings in Problems panel) on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md` | Editing customization files — see cost and anti-patterns ambiently |
+| **`.vsix` extension** (v0.2.0+) | Inline CodeLens (per-file token cost) + Diagnostics (anti-pattern findings in Problems panel) + Quick Fix (Cmd+. apply / preview / suppress) on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md` | Editing customization files — see cost, anti-patterns, and one-click fixes ambiently |
 | **`scripts/install-*.sh`** (v0.1.x) | `.github/agents/`, `.github/skills/`, `.github/prompts/` assets for Copilot Chat | Running `@token-doctor` / `/token-audit` in Copilot Chat |
 
 Both rely on the same [`tokopt`](https://github.com/shinyay/tokopt) Go CLI for measurement.
@@ -94,6 +94,64 @@ The provider re-runs `tokopt detect` against the workspace when:
 - you change any `tokopt.*` setting
 
 Run **tokopt: Clear Diagnostics** from the palette if you want to drop all findings temporarily (e.g. during a focused editing session). They'll be repopulated on the next save.
+
+---
+
+## 🩹 The Quick Fix (`v0.4.0`)
+
+Every `tokopt` diagnostic now ships with a **lightbulb (Cmd+. / Ctrl+.)** menu so you can act on findings without leaving the editor.
+
+```
+.github/copilot-instructions.md
+  ⚠ Always-on instruction file is large — 604 tokens sent on every interaction.
+    💡 Preview tokopt slim diff for this file
+    💡 Apply tokopt slim suggestion
+    💡 Suppress `kitchen-sink-system-prompt` for this file
+    💡 Learn more about `kitchen-sink-system-prompt` (Ch 14)
+```
+
+### Action set
+
+| Action | What it does | Available for |
+|---|---|---|
+| **Preview slim diff** | Runs `tokopt slim`, opens the result side-by-side in the diff editor (no temp files — served from a `tokopt-slim:` virtual URI) | Mechanical-compression findings only |
+| **Apply slim** | Replaces the whole document via a single undoable `WorkspaceEdit`. Reports `-N tokens (P%)` after | Mechanical-compression findings only |
+| **Suppress `<id>`** | Appends `<!-- tokopt:disable=<id> -->` to the document | Markdown files only |
+| **Learn more about `<id>`** | Opens the [anti-patterns chapter](https://github.com/shinyay/getting-started-with-token-optimization/blob/main/docs/14-anti-patterns-and-pitfalls.md) | Always offered |
+
+### Slim-fixable rules (the `SLIM_FIXABLE` allow-list)
+
+Apply / Preview are deliberately offered for **only three** finding IDs:
+
+- `kitchen-sink-system-prompt`
+- `verbose-auto-generated-instructions`
+- `huge-agents-md`
+
+All other findings — `mcp-*`, `verbose-tool-descriptions`, `polite-filler`, `format-inflation`, `possible-policy-tension`, `reasoning-leakage` — get **Suppress + Learn more only**, never a destructive mechanical fix. The reasons:
+
+- **JSON safety**: `verbose-tool-descriptions` and `mcp-*` live in JSON config. Running `tokopt slim` on JSON routes through TonForm, which can rewrite valid JSON as TOON — that silently breaks MCP config.
+- **Behavioural meaning**: `polite-filler`, `format-inflation`, `possible-policy-tension`, `reasoning-leakage` all flag *specific phrases* in context, not boilerplate. Stopword stripping won't touch them; only restructuring will.
+
+### Suppression syntax
+
+Add this HTML comment anywhere in a markdown file to silence a specific finding for that file only:
+
+```markdown
+<!-- tokopt:disable=kitchen-sink-system-prompt -->
+```
+
+Rules:
+
+- Markdown only (JSON / YAML config have no equivalent — the Suppress action is omitted there).
+- One rule per comment; multiple comments may appear in the same file.
+- Case-insensitive. Take effect on the **next** diagnostic refresh (i.e. after you save).
+- The **Suppress** Quick Fix inserts the comment via an in-memory edit — it does **not** auto-save your buffer, because saving would silently persist any unrelated unsaved edits. You'll see *"Save the file to clear the diagnostic"* in the toast.
+
+### Safety guarantees
+
+- **Dirty-buffer protection** — Apply / Preview refuse to run on an unsaved buffer. You're prompted to save first so slim's output matches the bytes you actually intend to ship.
+- **Single undoable edit** — Apply replaces the whole document with one `WorkspaceEdit`, so `Ctrl+Z` restores the pre-slim text in one keystroke.
+- **No fabricated savings** — if `tokopt slim` reports `saved 0`, the Apply action shows *"no mechanical savings — consider restructuring instead"* and aborts.
 
 ### Install the extension
 
