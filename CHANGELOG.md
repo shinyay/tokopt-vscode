@@ -4,6 +4,115 @@ All notable changes to **tokopt-vscode** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-05-30
+
+Adds **Quick Fix** code actions on top of the Diagnostic provider shipped
+in v0.3.0. Wherever a `tokopt` finding appears in the Problems panel, the
+lightbulb (Cmd+. / Ctrl+.) now offers context-appropriate remediation.
+
+### Added
+
+- **CodeActionProvider** — surfaces Quick Fixes against every diagnostic
+  whose `source === "tokopt"`. The provider is fully data-driven: it
+  trusts `diag.source` and `diag.code` rather than re-classifying the
+  underlying file.
+  ([#9](https://github.com/shinyay/tokopt-vscode/issues/9))
+
+- **Per-finding action set** (in lightbulb-menu order):
+  - **Preview tokopt slim diff for this file** — runs `tokopt slim` and
+    opens the result side-by-side via VS Code's built-in diff editor.
+    The compressed text is served from a virtual `tokopt-slim:` URI so
+    no temp files are written.
+  - **Apply tokopt slim suggestion** — runs `tokopt slim` and replaces
+    the whole document via a single `WorkspaceEdit`, so undo restores
+    the original in one keystroke. The post-apply toast reports
+    `-N tokens (P%)`.
+  - **Suppress `<id>` for this file** — appends
+    `<!-- tokopt:disable=<id> -->` via an in-memory edit. Markdown only.
+  - **Learn more about `<id>`** — opens the anti-patterns chapter on
+    GitHub. Always offered, even for findings tokopt can't auto-fix.
+
+- **`SLIM_FIXABLE` rule allow-list** — Apply / Preview are offered only
+  for `kitchen-sink-system-prompt`, `verbose-auto-generated-instructions`,
+  and `huge-agents-md`. Findings whose primary remediation is restructuring
+  (everything in `mcp-*`, `verbose-tool-descriptions`, `polite-filler`,
+  `format-inflation`, `possible-policy-tension`, `reasoning-leakage`)
+  intentionally get Suppress + Learn more only, never a destructive
+  mechanical fix.
+
+- **Suppression parser** (`src/suppressions.ts`) —
+  `<!-- tokopt:disable=<rule-id> -->` HTML comments are now recognised
+  per file. `TokoptDiagnosticManager` reads each file once per refresh,
+  parses suppressions, and filters matching findings before publishing
+  to the Problems panel. Saving the file picks up new markers on the
+  next refresh.
+
+- **Commands**:
+  - `tokopt.applySlim` — Quick Fix only (hidden from palette; defense
+    in depth against accidental whole-buffer rewrites on JSON / YAML)
+  - `tokopt.previewSlim` — Quick Fix only (hidden from palette)
+  - `tokopt.suppressFinding` — Quick Fix only (hidden from palette)
+  - `tokopt.learnMore` — Quick Fix only (hidden from palette)
+
+- **Activation events** — added `**/.vscode/mcp.json`,
+  `**/.cursor/mcp.json`, `**/.copilot/mcp-config.json` so the extension
+  activates in MCP-only workspaces (which have no `.md` customization
+  files but still surface `mcp-*` findings on the JSON config).
+
+- **AGENTS.md classification** — `classifyCustomizationFile` now treats
+  `AGENTS.md` as an always-on customization asset (matches `tokopt
+  detect`'s `huge-agents-md` finding targets). This gives the file a
+  CodeLens and ensures save-triggered diagnostic refresh works.
+
+### Changed
+
+- Bundle: 10.2 KB → 18.3 KB (added codeActions / slim / slimPreview /
+  suppressions modules plus race-detection + safety guards)
+
+- **Save listener broadened** — diagnostics now refresh on save whenever
+  EITHER the file is a recognised customization asset OR it currently
+  has tokopt diagnostics published. The second clause makes
+  Suppress / Apply edits clear or reshape findings on the very next
+  save, even for files outside the customization predicate.
+
+### Notes (hardening discussions captured during design + impl)
+
+- **Dirty-buffer protection** — Apply / Preview both refuse to run on
+  an unsaved buffer. They prompt the user to save first, so slim's
+  output matches the bytes the user actually intends to ship.
+- **No auto-save on Suppress** — the suppression comment is inserted
+  via `WorkspaceEdit` and **not** saved automatically. Calling
+  `doc.save()` would silently persist any unrelated unsaved edits.
+  The suppression takes effect the next time the user saves.
+- **Single undoable edit** — Apply uses a single full-document
+  `WorkspaceEdit.replace` with `positionAt(0)`–`positionAt(length)`,
+  so `Ctrl+Z` restores the pre-slim text in one step.
+- **JSON safety (two layers)** — `verbose-tool-descriptions` and all
+  `mcp-*` findings are deliberately *excluded* from `SLIM_FIXABLE`, AND
+  `applySlim` / `previewSlim` carry a runtime `isSlimSafeTarget`
+  guard that refuses to operate on anything other than markdown.
+  Programmatic invocation (keybinding, another extension) cannot
+  bypass the menu-level allow-list.
+- **No anchored Learn-more URLs** — `chapter_ref` on detect findings
+  (e.g. *"Ch 14 #11"* for `reasoning-leakage`) has drifted from the
+  actual numbered headings in the chapter, so anchored URLs would 404
+  silently. Learn more opens the chapter top — the reader can Ctrl+F.
+- **Fail-open suppressions** — if reading a file for suppressions
+  fails (deleted, permission error), the manager logs to the output
+  channel and proceeds with no suppressions for that file. Visibility
+  beats silent muting.
+- **Race detection** — `applySlim` snapshots `doc.version` before
+  invoking the (async) slim run and refuses to overwrite the buffer
+  if the user has edited it in the meantime. The user is asked to
+  re-run Apply against the current bytes.
+- **Per-URI in-flight guard** — a second click on Apply or Preview for
+  the same file while a slim run is in flight is silently ignored. No
+  two whole-buffer replace edits can race.
+- **Action dedupe** — when multiple `SLIM_FIXABLE` findings target the
+  same file the lightbulb still shows exactly one Preview and one
+  Apply (slim is file-scoped). Suppress + Learn more remain
+  per-finding because they're finding-specific.
+
 ## [0.3.0] — 2026-05-30
 
 Adds the **second consumer** of the `format_version: "v1"` envelope: an

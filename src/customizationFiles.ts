@@ -45,6 +45,20 @@ export function classifyCustomizationFile(
     };
   }
 
+  // Always-on: AGENTS.md (agent-skills.io spec — sent on every agent step).
+  // Matched by basename so both `AGENTS.md` at the repo root and
+  // `.github/AGENTS.md` (the two locations `tokopt detect`'s
+  // `huge-agents-md` finding targets — antipatterns.go:446) light up.
+  // False positives on `docs/AGENTS.md` are tolerated: a CodeLens hint is
+  // not a destructive change, and the user can ignore it.
+  if (basename === "AGENTS.md") {
+    return {
+      kind: "always-on",
+      label: "always-on",
+      description: "paid every agent step",
+    };
+  }
+
   // Conditional: agent definitions, chat modes
   if (lower.endsWith(".agent.md")) {
     return {

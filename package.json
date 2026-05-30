@@ -1,8 +1,8 @@
 {
   "name": "tokopt-vscode",
   "displayName": "tokopt — Token Optimization for Copilot",
-  "description": "Token-cost CodeLens + anti-pattern Diagnostics for Copilot customization files (instructions, agents, skills).",
-  "version": "0.3.0",
+  "description": "Token-cost CodeLens + anti-pattern Diagnostics + Quick Fix for Copilot customization files (instructions, agents, skills).",
+  "version": "0.4.0",
   "publisher": "shinyay",
   "license": "MIT",
   "repository": {
@@ -23,6 +23,8 @@
     "optimization",
     "codelens",
     "diagnostics",
+    "code-actions",
+    "quick-fix",
     "tokopt"
   ],
   "engines": {
@@ -37,7 +39,10 @@
     "workspaceContains:**/*.agent.md",
     "workspaceContains:**/*.chatmode.md",
     "workspaceContains:**/*.prompt.md",
-    "workspaceContains:**/SKILL.md"
+    "workspaceContains:**/SKILL.md",
+    "workspaceContains:**/.vscode/mcp.json",
+    "workspaceContains:**/.cursor/mcp.json",
+    "workspaceContains:**/.copilot/mcp-config.json"
   ],
   "contributes": {
     "configuration": {
@@ -68,8 +73,44 @@
       {
         "command": "tokopt.clearDiagnostics",
         "title": "tokopt: Clear Diagnostics"
+      },
+      {
+        "command": "tokopt.applySlim",
+        "title": "tokopt: Apply slim suggestion to current file"
+      },
+      {
+        "command": "tokopt.previewSlim",
+        "title": "tokopt: Preview slim diff for current file"
+      },
+      {
+        "command": "tokopt.suppressFinding",
+        "title": "tokopt: Suppress finding (Quick Fix only)"
+      },
+      {
+        "command": "tokopt.learnMore",
+        "title": "tokopt: Open anti-patterns chapter"
       }
-    ]
+    ],
+    "menus": {
+      "commandPalette": [
+        {
+          "command": "tokopt.applySlim",
+          "when": "false"
+        },
+        {
+          "command": "tokopt.previewSlim",
+          "when": "false"
+        },
+        {
+          "command": "tokopt.suppressFinding",
+          "when": "false"
+        },
+        {
+          "command": "tokopt.learnMore",
+          "when": "false"
+        }
+      ]
+    }
   },
   "scripts": {
     "build": "node esbuild.mjs",
