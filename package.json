@@ -1,8 +1,8 @@
 {
   "name": "tokopt-vscode",
   "displayName": "tokopt — Token Optimization for Copilot",
-  "description": "Token-cost CodeLens + anti-pattern Diagnostics + Quick Fix + Status bar (always-on tax) for Copilot customization files (instructions, agents, skills).",
-  "version": "0.5.0",
+  "description": "Token-cost CodeLens + anti-pattern Diagnostics + Quick Fix + Status bar (always-on tax) + Token Cost TreeView for Copilot customization files (instructions, agents, skills).",
+  "version": "0.6.0",
   "publisher": "shinyay",
   "license": "MIT",
   "repository": {
@@ -26,6 +26,7 @@
     "code-actions",
     "quick-fix",
     "status-bar",
+    "treeview",
     "tokopt"
   ],
   "engines": {
@@ -45,7 +46,8 @@
     "workspaceContains:**/SKILL.md",
     "workspaceContains:**/.vscode/mcp.json",
     "workspaceContains:**/.cursor/mcp.json",
-    "workspaceContains:**/.copilot/mcp-config.json"
+    "workspaceContains:**/.copilot/mcp-config.json",
+    "onView:tokoptTokenCost"
   ],
   "contributes": {
     "configuration": {
@@ -82,6 +84,23 @@
           "default": 1500,
           "minimum": 0,
           "description": "Background turns error-coloured when the always-on tax reaches this many tokens."
+        },
+        "tokopt.treeView.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the Token Cost TreeView in the Explorer sidebar. Lists customization files grouped by scope (always-on / conditional / on-demand) and sorted by token count. Refreshes lazily — first audit runs only after you open the view."
+        },
+        "tokopt.treeView.warnThreshold": {
+          "type": "number",
+          "default": 500,
+          "minimum": 0,
+          "description": "Files (and category totals) reaching this many tokens show a warning icon (yellow) in the Token Cost TreeView."
+        },
+        "tokopt.treeView.errorThreshold": {
+          "type": "number",
+          "default": 1500,
+          "minimum": 0,
+          "description": "Files (and category totals) reaching this many tokens show an error icon (red) in the Token Cost TreeView. Clamped to be >= treeView.warnThreshold at runtime."
         }
       }
     },
@@ -117,6 +136,62 @@
       {
         "command": "tokopt.showStatusBarBreakdown",
         "title": "tokopt: Show always-on tax breakdown"
+      },
+      {
+        "command": "tokopt.tree.refresh",
+        "title": "tokopt: Refresh Token Cost",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "tokopt.tree.openFile",
+        "title": "Open"
+      },
+      {
+        "command": "tokopt.tree.slimFile",
+        "title": "Run tokopt slim",
+        "icon": "$(zap)"
+      },
+      {
+        "command": "tokopt.tree.detectFile",
+        "title": "Run tokopt detect",
+        "icon": "$(search)"
+      },
+      {
+        "command": "tokopt.tree.showAuditPanel",
+        "title": "tokopt: Show audit breakdown in output channel"
+      }
+    ],
+    "views": {
+      "explorer": [
+        {
+          "id": "tokoptTokenCost",
+          "name": "Token Cost",
+          "when": "config.tokopt.treeView.enabled",
+          "icon": "$(symbol-numeric)",
+          "contextualTitle": "tokopt"
+        }
+      ]
+    },
+    "viewsWelcome": [
+      {
+        "view": "tokoptTokenCost",
+        "contents": "Loading customization-file inventory…",
+        "when": "tokopt.tree.state == loading"
+      },
+      {
+        "view": "tokoptTokenCost",
+        "contents": "[tokopt](https://github.com/shinyay/tokopt) binary not found on PATH.\n\nInstall:\n```\ncurl -fsSL https://raw.githubusercontent.com/shinyay/tokopt/main/scripts/install.sh | sh\n```\n[Try again](command:tokopt.tree.refresh)",
+        "when": "tokopt.tree.state == missingBinary"
+      },
+      {
+        "view": "tokoptTokenCost",
+        "contents": "No Copilot customization files found in this workspace.\n\nAdd a `.github/copilot-instructions.md`, an `AGENTS.md`, or any `*.agent.md` / `SKILL.md` / `*.prompt.md` / `*.chatmode.md` file to see it appear here.\n[Refresh](command:tokopt.tree.refresh)",
+        "when": "tokopt.tree.state == empty"
+      },
+      {
+        "view": "tokoptTokenCost",
+        "contents": "tokopt audit failed. Check the [tokopt output channel](command:tokopt.tree.showAuditPanel) for details.\n[Retry](command:tokopt.tree.refresh)",
+        "when": "tokopt.tree.state == error"
       }
     ],
     "menus": {
@@ -140,6 +215,42 @@
         {
           "command": "tokopt.showStatusBarBreakdown",
           "when": "false"
+        },
+        {
+          "command": "tokopt.tree.openFile",
+          "when": "false"
+        },
+        {
+          "command": "tokopt.tree.slimFile",
+          "when": "false"
+        },
+        {
+          "command": "tokopt.tree.detectFile",
+          "when": "false"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "tokopt.tree.refresh",
+          "when": "view == tokoptTokenCost",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "tokopt.tree.openFile",
+          "when": "view == tokoptTokenCost && (viewItem == tokoptFileMarkdown || viewItem == tokoptFileConfig)",
+          "group": "navigation@1"
+        },
+        {
+          "command": "tokopt.tree.slimFile",
+          "when": "view == tokoptTokenCost && viewItem == tokoptFileMarkdown",
+          "group": "tokopt@1"
+        },
+        {
+          "command": "tokopt.tree.detectFile",
+          "when": "view == tokoptTokenCost && (viewItem == tokoptFileMarkdown || viewItem == tokoptFileConfig)",
+          "group": "tokopt@2"
         }
       ]
     }

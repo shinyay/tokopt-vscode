@@ -4,6 +4,157 @@ All notable changes to **tokopt-vscode** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] — 2026-05-30
+
+Adds a **Token Cost TreeView** in the Explorer sidebar — the fifth
+surface in the extension's ecosystem and the first to provide a
+workspace-wide, browsable inventory of customization files grouped by
+runtime scope (always-on / conditional / on-demand). Backed by
+`tokopt audit --format=json`, refreshed lazily, and gated by stable
+TreeItem IDs so VS Code keeps collapse state across refreshes.
+
+### Added
+
+- **`TokenCostTreeProvider`** — a `TreeDataProvider` that lists every
+  customization file `tokopt audit` discovers in each workspace folder,
+  grouped under three scope categories (Always-on / Conditional /
+  On-demand) and sorted by token count descending. Each file row shows
+  `<rel/path>  · <N tokens>` with a colored icon (green / yellow / red)
+  driven by the same `warnThreshold` (default 500) and `errorThreshold`
+  (default 1500) thresholds the Status bar uses.
+  ([#10](https://github.com/shinyay/tokopt-vscode/issues/10))
+
+- **`src/audit.ts`** — fourth consumer of the `format_version: "v1"`
+  envelope. Strict equality check, per-file shape validation (drops
+  unknown scope/malformed rows rather than blanking the whole tree),
+  30s timeout, 8 MB stdout cap (broader than `count`/`detect` because
+  audit recursively walks the workspace).
+
+- **Five new commands**, all `tokopt.tree.*`-prefixed:
+  - `tokopt.tree.refresh` — palette + title-bar refresh button on the
+    view; bumps generation, clears cache, schedules a fresh audit.
+  - `tokopt.tree.openFile` — right-click → Open (palette-hidden).
+  - `tokopt.tree.slimFile` — right-click on markdown rows only
+    (`viewItem == tokoptFileMarkdown`); delegates to the existing
+    `tokopt.applySlim` Quick Fix command (palette-hidden).
+  - `tokopt.tree.detectFile` — right-click → run `tokopt detect` for the
+    containing workspace folder and filter findings to the selected
+    file's absolute path (palette-hidden; uses path filter because the
+    `tokopt detect <file>` CLI form is currently undocumented).
+  - `tokopt.tree.showAuditPanel` — palette command that reveals the
+    tokopt output channel and dumps the cached `tokopt audit` JSON
+    (replay-friendly; doesn't re-run the audit).
+
+- **Three new settings** under `tokopt.treeView.*`:
+  - `enabled` (boolean, default `true`) — hides the entire view when
+    `false` via `when: "config.tokopt.treeView.enabled"`.
+  - `warnThreshold` (number, default `500`, min `0`) — yellow icon
+    threshold for file + category rows.
+  - `errorThreshold` (number, default `1500`, min `0`) — red icon
+    threshold. Clamped to be `>= warnThreshold` at runtime so a
+    pathological config can't invert the colors.
+
+- **Four `viewsWelcome` states**, gated on a `tokopt.tree.state`
+  context key:
+  - `loading` — initial audit in progress.
+  - `missingBinary` — `tokopt` not on PATH (links to install script).
+  - `empty` — no customization files discovered.
+  - `error` — audit failed (links to the output channel for details).
+
+- **Lazy first refresh** — the TreeView does ZERO work on extension
+  activation. The first audit only runs when the view actually becomes
+  visible (`onDidChangeVisibility`). Save / watcher events fired before
+  the first open are coalesced into a single deferred refresh that
+  fires when the view is first opened. Activation event
+  `onView:tokoptTokenCost` is registered so opening the view brings
+  the extension to life if it wasn't already.
+
+- **FileSystemWatcher** for a broader customization-file glob than the
+  Status bar uses (audit walks recursively, so any nested `*.agent.md`
+  or `SKILL.md` should refresh the tree). Save listener also schedules
+  a refresh for any file `classifyCustomizationFile()` recognises, so
+  newly-created customization files appear without a manual refresh.
+
+### Changed
+
+- **`package.json` — `version`** → `0.6.0`, description gains "+ Token
+  Cost TreeView", keywords gain `"treeview"`, activation events gain
+  `onView:tokoptTokenCost`.
+
+- **Bundle size** 25.8 KB → **36.5 KB** (+10.7 KB / +41%); .vsix 25.2 KB
+  → **31.4 KB** (+6.2 KB / +25%). The bulk comes from the new
+  `tokenCost.ts` (~480 lines), `audit.ts` (~170 lines), and the
+  `viewsWelcome` + per-row context machinery in `extension.ts` /
+  `package.json`.
+
+### Rubber-duck adoptions
+
+- **13 design-phase findings** (all adopted):
+  - **H#1** Lazy first refresh — no work on activation; visibility latch
+    triggers the first audit; saves before first open queue a deferred
+    refresh.
+  - **H#2** Workspace-scoped `detect` + path filter — works around the
+    undocumented `tokopt detect <file>` form by running a folder-wide
+    detect and filtering findings by absolute path.
+  - **H#3** Per-row `contextValue` differentiation
+    (`tokoptFileMarkdown` vs `tokoptFileConfig`) so the slim menu
+    entry only appears on markdown rows (not `mcp.json`).
+  - **H#4** Cache is "last-published state", not a freshness
+    shortcut — every refresh re-runs `tokopt audit`; the per-folder
+    map only exists for graceful degradation when one folder fails
+    and for the audit-panel replay.
+  - **M#5** Save listener always schedules a refresh (newly-created
+    files matter — checking "path is in last result" would miss them).
+  - **M#6** `getChildren` returns `[]` when state isn't `ready` so
+    `viewsWelcome` actually renders.
+  - **M#7** Context-keyed welcome states via
+    `vscode.commands.executeCommand("setContext", ...)`.
+  - **M#8** Threshold normalization —
+    `error = max(warn, configError)`, `warn = max(0, configWarn)`.
+  - **M#9** Token-count badging via TreeItem `description` + tooltip
+    + colored `ThemeIcon` (no badge API exists for tree items).
+  - **L#10** Defensive path resolution — `path.resolve` + verify the
+    result stays under the workspace folder root.
+  - **L#11** Atomic multi-folder publish —
+    `Promise.allSettled` + single `_onDidChangeTreeData.fire()` at the
+    end, with generation re-check before AND after the merge.
+  - **L#12** Stable TreeItem IDs (`category:<scope>` / `file:<absPath>`)
+    so VS Code preserves collapse state across refreshes.
+  - **L#13** Raw `tokopt audit` JSON preserved for exact replay via
+    `tokopt.tree.showAuditPanel`.
+
+- **4 post-impl hardening findings** (all adopted):
+  - **H** First-open activation could miss the visibility event when
+    `onView:tokoptTokenCost` activates the extension — explicit
+    `if (tokenCostView.visible) onVisibilityChange(true)` after
+    registering the listener.
+  - **M** Initial `loading` context key never set — `state` starts as
+    `undefined` so the constructor's `setState("loading")` actually
+    publishes.
+  - **M** `clearCache()` now bumps the generation counter so any
+    in-flight audit's results are discarded; the title-bar refresh
+    command no longer double-fires `clearCache + refresh`.
+  - **M** Mixed empty/error workspace state — partial failures now
+    set `state == "error"` rather than masquerading as `empty`.
+
+### Notes
+
+- **Five-surface ecosystem complete.** With this release the extension
+  spans editing-time precision (CodeLens), problem surfacing
+  (Diagnostics), remediation (Quick Fix), peripheral awareness
+  (Status bar), and now browsable inventory (TreeView):
+
+  | Surface | Granularity | Use case |
+  |---|---|---|
+  | CodeLens (v0.2.0) | Per-file | Editing precision |
+  | Diagnostics (v0.3.0) | Per-finding | Anti-pattern surfacing |
+  | Quick Fix (v0.4.0) | Per-finding | One-click remediation |
+  | Status bar (v0.5.0) | Per-workspace | Always-visible awareness |
+  | **TreeView (v0.6.0)** | **Per-workspace + per-file inventory** | **Cost discovery & navigation** |
+
+- **`format_version: "v1"` ROI compounding (5th consumer).** Future
+  schema changes ship a single warning across all five surfaces.
+
 ## [0.5.0] — 2026-05-30
 
 Adds a **status-bar item** showing the workspace's _always-on tax_ — the
