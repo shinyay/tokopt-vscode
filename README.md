@@ -1,21 +1,80 @@
 # tokopt-vscode
 
-> **VS Code Copilot Chat companion** to [`tokopt-skills`](https://github.com/shinyay/tokopt-skills) — 9 token-optimization skills + 2 custom agents + 4 slash-command prompts for the [`tokopt`](https://github.com/shinyay/tokopt) CLI, packaged for VS Code Copilot Chat.
+> **VS Code companion to [`tokopt`](https://github.com/shinyay/tokopt)** — ships both a `.vsix` extension (inline token-cost **CodeLens**) and Copilot Chat assets (`@token-doctor`, `/token-audit`, etc.) for the [`tokopt-skills`](https://github.com/shinyay/tokopt-skills) ecosystem.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Format: Agent Skills](https://img.shields.io/badge/format-agentskills.io-blue)](https://agentskills.io)
 [![VS Code](https://img.shields.io/badge/VS%20Code-Copilot%20Chat-007ACC)](https://code.visualstudio.com/docs/copilot/customization/overview)
 
-Install once. Then ask VS Code Copilot Chat in natural language — or via `/token-audit`, `@token-doctor` slash UX — to **measure**, **diagnose**, and **fix** the token cost of any Copilot/agent repository.
+Two complementary install surfaces — pick either, or both:
+
+| Surface | What you get | Best for |
+|---|---|---|
+| **`.vsix` extension** (v0.2.0+) | Inline CodeLens showing per-file token cost on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md` | Editing customization files — see cost ambiently |
+| **`scripts/install-*.sh`** (v0.1.x) | `.github/agents/`, `.github/skills/`, `.github/prompts/` assets for Copilot Chat | Running `@token-doctor` / `/token-audit` in Copilot Chat |
+
+Both rely on the same [`tokopt`](https://github.com/shinyay/tokopt) Go CLI for measurement.
 
 ---
 
 > [!IMPORTANT]
-> **Prerequisite**: this package is a thin Copilot Chat wrapper around the [`tokopt`](https://github.com/shinyay/tokopt) Go CLI. The CLI **must be installed first** (Step 1 below) — without it, every slash command and agent will fail at runtime with `tokopt: command not found`. Verify with `tokopt --version` before installing this package.
+> **Prerequisite**: the `tokopt` binary must be on `PATH`. Without it, every slash command, agent, and the extension's CodeLens will silently disable themselves. Install:
+> ```bash
+> curl -fsSL https://raw.githubusercontent.com/shinyay/tokopt/main/scripts/install.sh | sh
+> ```
+> Verify with `tokopt --version`.
 
 ---
 
-## 📦 Install (2 steps)
+## 🖼️ The CodeLens (`v0.2.0`)
+
+When you open a recognised customization file in VS Code, you'll see one CodeLens at the top of the file:
+
+```
+▸ 1,394 tokens (conditional, paid when agent invoked)
+# My Agent
+
+You are a helpful…
+```
+
+Click the CodeLens for a breakdown plus suggested follow-up commands (`tokopt anatomy`, `tokopt detect`).
+
+### Recognised file kinds
+
+| Path / extension | Cost class | Meaning |
+|---|---|---|
+| `copilot-instructions.md` | **always-on** | paid on every Copilot request |
+| `*.agent.md` | **conditional** | paid only when `@agent-name` is invoked |
+| `*.chatmode.md` | **conditional** | paid only when the chat mode is activated |
+| `SKILL.md` | **on-demand** | paid only when the skill loads via description match |
+| `*.prompt.md` | **on-demand** | paid only when the slash command is invoked |
+
+### Settings
+
+| Setting | Default | Effect |
+|---|---|---|
+| `tokopt.codeLens.enabled` | `true` | Show / hide the CodeLens globally |
+| `tokopt.binaryPath` | `"tokopt"` | Override if `tokopt` is not on `PATH` (use absolute path) |
+
+### How it works under the hood
+
+The extension calls `tokopt count --format=json <file>` and dispatches strictly on the `format_version: "v1"` envelope ([upstream schema doc](https://github.com/shinyay/getting-started-with-token-optimization/blob/main/tools/tokopt/docs/cli-json-schema.md)). Anything other than `"v1"` triggers a one-time upgrade warning and silently disables CodeLens — a future `v2` schema will never crash the extension.
+
+### Install the extension
+
+For now, install from a built `.vsix` (marketplace publishing TBD):
+
+```bash
+# Build locally
+git clone https://github.com/shinyay/tokopt-vscode.git
+cd tokopt-vscode
+npm install && npm run package
+code --install-extension tokopt-vscode-*.vsix
+```
+
+---
+
+## 📦 Install the Copilot Chat assets (v0.1.x — independent of the extension)
 
 ### Step 1 — Install the `tokopt` binary
 

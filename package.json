@@ -1,0 +1,65 @@
+{
+  "name": "tokopt-vscode",
+  "displayName": "tokopt — Token Optimization for Copilot",
+  "description": "Inline token-cost CodeLens on Copilot customization files (instructions, agents, skills).",
+  "version": "0.2.0",
+  "publisher": "shinyay",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/shinyay/tokopt-vscode.git"
+  },
+  "homepage": "https://github.com/shinyay/tokopt-vscode#readme",
+  "bugs": {
+    "url": "https://github.com/shinyay/tokopt-vscode/issues"
+  },
+  "categories": [
+    "Other",
+    "Programming Languages"
+  ],
+  "keywords": [
+    "copilot",
+    "token",
+    "optimization",
+    "codelens",
+    "tokopt"
+  ],
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "main": "./out/extension.js",
+  "activationEvents": [
+    "onLanguage:markdown"
+  ],
+  "contributes": {
+    "configuration": {
+      "title": "tokopt",
+      "properties": {
+        "tokopt.codeLens.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show inline token-cost CodeLens on Copilot customization files."
+        },
+        "tokopt.binaryPath": {
+          "type": "string",
+          "default": "tokopt",
+          "description": "Path to the tokopt binary. Use 'tokopt' to resolve from PATH, or an absolute path."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "node esbuild.mjs",
+    "watch": "node esbuild.mjs --watch",
+    "vscode:prepublish": "npm run build",
+    "package": "vsce package --no-dependencies",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "@types/vscode": "^1.85.0",
+    "@vscode/vsce": "^3.0.0",
+    "esbuild": "^0.24.0",
+    "typescript": "^5.4.0"
+  }
+}
