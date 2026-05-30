@@ -4,6 +4,105 @@ All notable changes to **tokopt-vscode** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — 2026-05-30
+
+Adds a **status-bar item** showing the workspace's _always-on tax_ — the
+sum of tokens across well-known global customization files at the
+workspace root and `.github/`. Complements the v0.4.0 Quick Fix surface:
+CodeLens = per-file editing precision; Diagnostics = per-finding
+remediation; Status bar = peripheral, always-visible workspace
+awareness.
+
+### Added
+
+- **`TokoptStatusBarManager`** — right-aligned status bar item rendering
+  `$(file-text) N tokens always-on` (plus `/ current: M` when the active
+  editor is a recognised customization file that isn't itself in the
+  tax). Background turns warning-coloured at `>= warnThreshold` (default
+  500) and error-coloured at `>= errorThreshold` (default 1500). Click
+  reveals a per-file breakdown in the **tokopt** output channel.
+  ([#7](https://github.com/shinyay/tokopt-vscode/issues/7))
+
+- **Strict always-on discovery** — enumerates a fixed six locations per
+  workspace folder (`<root>/{copilot-instructions.md,instructions.md,
+  AGENTS.md}` plus the same three under `<root>/.github/`). NO recursive
+  glob walk: `docs/AGENTS.md`, `packages/foo/AGENTS.md`, etc. are
+  intentionally NOT included in the workspace tax — only files at the
+  conventional global injection points count. This is deliberately
+  stricter than the CodeLens classifier, which tolerates false positives
+  on hint-only displays.
+
+- **Refresh triggers**:
+  - extension activation (best-effort initial scan + initial
+    current-file count)
+  - save of a strict always-on file (debounced 250ms)
+  - `FileSystemWatcher` on the strict patterns — create / change / delete
+    events outside save-listener coverage (external edits, file
+    deletions, git checkout flipping files in/out)
+  - active-editor change (current-file appendix only, never re-scans the
+    tax)
+  - `onDidChangeWorkspaceFolders` — clears cache and re-scans
+  - `tokopt.refreshStatusBar` command (palette:
+    *tokopt: Refresh Status Bar*)
+  - configuration changes under `tokopt.*`
+
+- **Commands**:
+  - `tokopt.refreshStatusBar` — palette manual rescan
+  - `tokopt.showStatusBarBreakdown` — click handler (hidden from palette
+    via `when: "false"`); writes a per-file breakdown to the **tokopt**
+    output channel and reveals it
+
+- **Settings**:
+  - `tokopt.statusBar.enabled` (boolean, default `true`)
+  - `tokopt.statusBar.warnThreshold` (number, default `500`)
+  - `tokopt.statusBar.errorThreshold` (number, default `1500`)
+
+- **Activation events** — added `workspaceContains:**/AGENTS.md` and
+  `workspaceContains:**/.github/AGENTS.md` so workspaces containing only
+  an AGENTS.md (no other markdown / MCP config) still activate the
+  extension and surface the tax.
+
+### Changed
+
+- Bundle: 18.3 KB → 25.8 KB; `.vsix`: 22.6 KB → 25.2 KB.
+
+### Notes (rubber-duck hardening adopted during design + impl)
+
+- **Strict tax model** — `classifyCustomizationFile` is intentionally
+  permissive (basename match on `AGENTS.md` covers `docs/AGENTS.md`) for
+  the CodeLens hint, but that would over-count for the workspace tax.
+  The status bar uses a separate `isStrictAlwaysOnPath` predicate that
+  restricts to the six conventional locations only.
+- **Cache race protection** — cache entries are keyed on
+  `mtimeMs + size + binaryPath`. Cache writes inside `runOnce` are
+  collected into a local `Map` and merged only AFTER the generation
+  check passes; in-flight runs that start with an old `binaryPath`
+  cannot repopulate the cache after a config change. The save-listener
+  `invalidate()` only bumps `generation` when the path was actually
+  cached, so unrelated saves (e.g. `foo.ts`) cannot starve an in-flight
+  activation scan.
+- **`updateCurrentFile` stale-result guards** — a request-sequence
+  counter, the current active-editor path, and the current `binaryPath`
+  are all snapshotted before the async count and re-checked after.
+  Cmd+Tab between two customization files cannot let an older, slower
+  count clobber the newer one. A stale `binary-missing` result does NOT
+  flip the `binaryMissing` flag — that's owned by `runOnce`.
+- **Debounced refresh** — `scheduleRefresh()` collapses rapid save +
+  watcher firings into a single scan via a 250ms timer. Concurrent
+  refresh requests are coalesced via the existing `refreshing /
+  pendingRefresh` mutex pattern (mirrors `TokoptDiagnosticManager`).
+- **Output channel breakdown, not modal** — issue calls for an
+  "audit panel / output" click target. A modal info dialog would be
+  cramped and uncopyable; the existing tokopt output channel is the
+  right surface for a multi-file table.
+- **`/ current: N` suppressed for tax-contributing files** — when the
+  active editor IS one of the strict always-on files, the headline
+  already includes its tokens; appending the same value as `/ current`
+  would be redundant. The breakdown shows per-file values.
+- **Disabled status bar zero-cost** — `updateCurrentFile` early-returns
+  when `statusBar.enabled === false`, so a user who turns it off pays
+  zero subprocess cost on editor switches.
+
 ## [0.4.0] — 2026-05-30
 
 Adds **Quick Fix** code actions on top of the Diagnostic provider shipped

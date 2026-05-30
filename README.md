@@ -10,7 +10,7 @@ Two complementary install surfaces — pick either, or both:
 
 | Surface | What you get | Best for |
 |---|---|---|
-| **`.vsix` extension** (v0.2.0+) | Inline CodeLens (per-file token cost) + Diagnostics (anti-pattern findings in Problems panel) + Quick Fix (Cmd+. apply / preview / suppress) on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md` | Editing customization files — see cost, anti-patterns, and one-click fixes ambiently |
+| **`.vsix` extension** (v0.2.0+) | Inline CodeLens (per-file token cost) + Diagnostics (anti-pattern findings in Problems panel) + Quick Fix (Cmd+. apply / preview / suppress) + Status bar (always-on tax for current workspace) on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md`, `AGENTS.md` | Editing customization files — see cost, anti-patterns, and one-click fixes ambiently |
 | **`scripts/install-*.sh`** (v0.1.x) | `.github/agents/`, `.github/skills/`, `.github/prompts/` assets for Copilot Chat | Running `@token-doctor` / `/token-audit` in Copilot Chat |
 
 Both rely on the same [`tokopt`](https://github.com/shinyay/tokopt) Go CLI for measurement.
@@ -152,6 +152,75 @@ Rules:
 - **Dirty-buffer protection** — Apply / Preview refuse to run on an unsaved buffer. You're prompted to save first so slim's output matches the bytes you actually intend to ship.
 - **Single undoable edit** — Apply replaces the whole document with one `WorkspaceEdit`, so `Ctrl+Z` restores the pre-slim text in one keystroke.
 - **No fabricated savings** — if `tokopt slim` reports `saved 0`, the Apply action shows *"no mechanical savings — consider restructuring instead"* and aborts.
+
+---
+
+## 📊 The Status bar (`v0.5.0`)
+
+A right-aligned status-bar item shows the **always-on tax** for the
+current workspace — the sum of tokens across well-known global
+customization files at the workspace root and `.github/`.
+
+```
+… $(file-text) 1,234 tokens always-on
+```
+
+When the active editor is itself a customization file that **isn't** in
+the always-on tax (e.g. an `.agent.md` or `SKILL.md`), the headline
+appends the current file's count:
+
+```
+… $(file-text) 1,234 tokens always-on / current: 879
+```
+
+### What's counted in the "always-on" tax
+
+A **strict six locations** per workspace folder — NO recursive walk:
+
+| Filename | Workspace root | Under `.github/` |
+|---|---|---|
+| `copilot-instructions.md` | ✅ | ✅ |
+| `instructions.md` | ✅ | ✅ |
+| `AGENTS.md` | ✅ | ✅ |
+
+This is deliberately stricter than the CodeLens classifier. `docs/AGENTS.md`, `packages/foo/AGENTS.md`, or any nested `instructions.md` are **never** counted in the tax — only files at conventional global injection points.
+
+### Colour coding
+
+| Tokens | Background |
+|---|---|
+| `< warnThreshold` (default 500) | none |
+| `>= warnThreshold` | `statusBarItem.warningBackground` (yellow) |
+| `>= errorThreshold` (default 1500) | `statusBarItem.errorBackground` (red) |
+
+Tooltip on hover shows the per-file count, file count, configured thresholds, and a click hint. Click the item to dump a per-file breakdown into the **tokopt** output channel.
+
+### Refresh triggers
+
+- Activation (best-effort initial scan)
+- Save of a strict always-on file (debounced 250ms — multiple rapid saves collapse into one rescan)
+- External create / change / delete of a strict always-on file (via `FileSystemWatcher`)
+- Active-editor change (current-file appendix only — does NOT re-scan the tax)
+- Workspace folders added / removed
+- `tokopt: Refresh Status Bar` (palette)
+- Any `tokopt.*` setting change
+
+### Settings
+
+```jsonc
+{
+  "tokopt.statusBar.enabled": true,
+  "tokopt.statusBar.warnThreshold": 500,
+  "tokopt.statusBar.errorThreshold": 1500
+}
+```
+
+### Hidden when
+
+- `tokopt.statusBar.enabled` is `false`
+- No workspace folders
+- No always-on files found in any strict location
+- `tokopt` binary missing (the existing one-time hint covers install guidance)
 
 ### Install the extension
 

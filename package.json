@@ -1,8 +1,8 @@
 {
   "name": "tokopt-vscode",
   "displayName": "tokopt — Token Optimization for Copilot",
-  "description": "Token-cost CodeLens + anti-pattern Diagnostics + Quick Fix for Copilot customization files (instructions, agents, skills).",
-  "version": "0.4.0",
+  "description": "Token-cost CodeLens + anti-pattern Diagnostics + Quick Fix + Status bar (always-on tax) for Copilot customization files (instructions, agents, skills).",
+  "version": "0.5.0",
   "publisher": "shinyay",
   "license": "MIT",
   "repository": {
@@ -25,6 +25,7 @@
     "diagnostics",
     "code-actions",
     "quick-fix",
+    "status-bar",
     "tokopt"
   ],
   "engines": {
@@ -36,6 +37,8 @@
     "workspaceContains:**/.github/copilot-instructions.md",
     "workspaceContains:**/copilot-instructions.md",
     "workspaceContains:**/instructions.md",
+    "workspaceContains:**/AGENTS.md",
+    "workspaceContains:**/.github/AGENTS.md",
     "workspaceContains:**/*.agent.md",
     "workspaceContains:**/*.chatmode.md",
     "workspaceContains:**/*.prompt.md",
@@ -62,6 +65,23 @@
           "type": "string",
           "default": "tokopt",
           "description": "Path to the tokopt binary. Use 'tokopt' to resolve from PATH, or an absolute path."
+        },
+        "tokopt.statusBar.enabled": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show the always-on tax in the status bar. Sums tokens across well-known always-on customization files at the workspace root and .github/."
+        },
+        "tokopt.statusBar.warnThreshold": {
+          "type": "number",
+          "default": 500,
+          "minimum": 0,
+          "description": "Background turns warning-coloured when the always-on tax reaches this many tokens."
+        },
+        "tokopt.statusBar.errorThreshold": {
+          "type": "number",
+          "default": 1500,
+          "minimum": 0,
+          "description": "Background turns error-coloured when the always-on tax reaches this many tokens."
         }
       }
     },
@@ -89,6 +109,14 @@
       {
         "command": "tokopt.learnMore",
         "title": "tokopt: Open anti-patterns chapter"
+      },
+      {
+        "command": "tokopt.refreshStatusBar",
+        "title": "tokopt: Refresh Status Bar"
+      },
+      {
+        "command": "tokopt.showStatusBarBreakdown",
+        "title": "tokopt: Show always-on tax breakdown"
       }
     ],
     "menus": {
@@ -107,6 +135,10 @@
         },
         {
           "command": "tokopt.learnMore",
+          "when": "false"
+        },
+        {
+          "command": "tokopt.showStatusBarBreakdown",
           "when": "false"
         }
       ]
