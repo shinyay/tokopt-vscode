@@ -1,7 +1,6 @@
 ---
 description: Apply tokopt slim compression IN-PLACE after the user reviewed a slim-suggest preview AND explicitly approved. Destructive — writes to disk.
 argument-hint: '[file] [--profile NAME]'
-tools: ['terminal']
 ---
 
 Run `tokopt slim --input <file> --apply --format json` to write the compressed output back to disk. **Destructive.** The CLI's safety ladder protects the file (clean git tree, symlink refusal, race detection, atomic write).

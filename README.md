@@ -10,6 +10,11 @@ Install once. Then ask VS Code Copilot Chat in natural language — or via `/tok
 
 ---
 
+> [!IMPORTANT]
+> **Prerequisite**: this package is a thin Copilot Chat wrapper around the [`tokopt`](https://github.com/shinyay/tokopt) Go CLI. The CLI **must be installed first** (Step 1 below) — without it, every slash command and agent will fail at runtime with `tokopt: command not found`. Verify with `tokopt --version` before installing this package.
+
+---
+
 ## 📦 Install (2 steps)
 
 ### Step 1 — Install the `tokopt` binary

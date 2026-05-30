@@ -1,7 +1,6 @@
 ---
 description: Decompose a prompt into the 7 canonical segments (system, always-on, tools, history, retrieved, user, reasoning) and show where the tokens go.
 argument-hint: '[file-path] [--segment NAME]'
-tools: ['terminal']
 ---
 
 Run `tokopt anatomy` on the provided file path and report the segment breakdown.

@@ -1,7 +1,6 @@
 ---
 description: Preview how many tokens a file or directory would save under tokopt slim — read-only, never modifies anything.
 argument-hint: '[file-or-dir] [--profile NAME]'
-tools: ['terminal']
 ---
 
 Run `tokopt slim <path> --format json` and report the preview. **Read-only** — never run with `--apply` from this prompt; that flow belongs to `/slim-apply`.

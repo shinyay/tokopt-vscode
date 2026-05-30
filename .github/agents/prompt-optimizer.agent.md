@@ -22,6 +22,10 @@ same file; never overlap autonomously.
   command.
 - If stdin unavailable: say "token delta unavailable" — never
   invent.
+- **Sandbox fallback (VS Code Chat)**: if `tokopt` is not on
+  `PATH`, try `~/go/bin/tokopt` directly before declaring it
+  missing. Default sandboxed terminal blocks workspace-external
+  paths; one direct probe is enough.
 
 ## Customization-aware
 

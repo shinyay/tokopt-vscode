@@ -1,6 +1,5 @@
 ---
 description: Run a token audit on the current repository — measures always-on, conditional, and on-demand token tax.
-tools: ['terminal']
 ---
 
 Run `tokopt audit .` in the workspace root and report the result. Group findings into three buckets:

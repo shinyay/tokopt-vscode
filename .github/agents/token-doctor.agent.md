@@ -27,6 +27,20 @@ that those numbers support.
    EITHER one structural edit OR one slim-apply, never both
    (preserves rule 3's attribution).
 
+## Sandbox awareness (VS Code Chat)
+
+When `run_in_terminal` is sandboxed (workspace-only paths, no
+network), `tokopt` may live outside the workspace (commonly
+`~/go/bin/tokopt`). Use this 2-step detection — do NOT chain 5+
+probes:
+
+1. `command -v tokopt` — use it if non-empty.
+2. Else: `~/go/bin/tokopt --version` directly.
+
+Report "tokopt not installed" ONLY after both fail. If your tool
+exposes a request-unsandboxed-execution flag, opt in for one
+confirmation probe before giving up.
+
 ## Default workflow
 
 For any new repo / session:
