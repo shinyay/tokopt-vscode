@@ -43,25 +43,35 @@ in the VS Code Problems panel.
 
 ### Changed
 
-- Bundle: 5.6 KB → 9.6 KB (added detect/diagnostics modules)
-- `.vsix`: 12 KB → 15 KB
+- Bundle: 5.6 KB → 10.2 KB (added detect/diagnostics/warnings modules)
+- `.vsix`: 12 KB → 17 KB
 - Extended `activationEvents` — extension now activates eagerly when a
   workspace contains any of `**/.github/copilot-instructions.md`,
-  `**/copilot-instructions.md`, `**/*.agent.md`, `**/SKILL.md`. CodeLens
-  still relies on the original `onLanguage:markdown` activation; the new
-  events ensure the initial diagnostic scan runs without waiting for the
-  user to open a markdown file first.
+  `**/copilot-instructions.md`, `**/instructions.md`, `**/*.agent.md`,
+  `**/*.chatmode.md`, `**/*.prompt.md`, `**/SKILL.md`. CodeLens still
+  relies on the original `onLanguage:markdown` activation; the new
+  events ensure the initial diagnostic scan runs without waiting for
+  the user to open a markdown file first.
+- `tokopt.binaryPath` now falls back to `"tokopt"` when set to an empty
+  string (was a hard error in Diagnostics; CodeLens already did this).
+- `tokopt.binaryPath` changes also reset the one-time warning latches so
+  the user sees a fresh warning if the new path is also bad.
 
 ### Notes
 
-- Findings are anchored to line 0 of each file. `tokopt detect` reports
-  file-level findings (no line numbers), so this matches the data shape
-  rather than guessing.
+- Findings are anchored to a zero-width range at line 0 of each file.
+  `tokopt detect` reports file-level findings (no line numbers), so this
+  matches the data shape rather than guessing.
 - Detectors that aggregate across multiple files (e.g. MCP overload)
   emit free-form location strings that aren't real paths. Those
-  findings are silently skipped for now — they're better surfaced via
-  the existing terminal output. A future enhancement could route them
-  to a dedicated Output channel.
+  findings are skipped and logged to the *tokopt* output channel rather
+  than rendering as bogus file paths in the Problems panel.
+- Locations are validated to stay within the scanned workspace folder
+  (no `..` escape) and to resolve to a real file on disk before being
+  published.
+- `clear()` and concurrent `refresh()` are protected by a generation
+  token: an in-flight detect cannot republish stale findings over an
+  explicit clear or a newer refresh.
 
 ## [0.2.0] — 2026-05-30
 
