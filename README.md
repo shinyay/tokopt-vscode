@@ -222,6 +222,88 @@ Tooltip on hover shows the per-file count, file count, configured thresholds, an
 - No always-on files found in any strict location
 - `tokopt` binary missing (the existing one-time hint covers install guidance)
 
+---
+
+## 🌲 The TreeView (`v0.6.0`)
+
+Adds a **Token Cost** view to the Explorer sidebar — a browsable
+inventory of every customization file `tokopt audit` finds in your
+workspace, **grouped by runtime scope** and **sorted by token count
+descending**.
+
+| Group | What it contains | Why it matters |
+|---|---|---|
+| 🟢 **Always-on** | `copilot-instructions.md`, `AGENTS.md`, root `instructions.md` | Loaded into _every_ Copilot turn. Every token here is paid every turn. |
+| 🟡 **Conditional** | `*.instructions.md` (scoped), `mcp.json`, `mcp-config.json` | Loaded when their conditions match (glob / tool / chat mode). |
+| 🔵 **On-demand** | `*.agent.md`, `*.chatmode.md`, `*.prompt.md`, `SKILL.md` | Loaded only when explicitly invoked (`@agent`, `/prompt`, mode switch). |
+
+Each row shows `<rel/path>  · <N tokens>` and gets a **colored icon**
+based on size — green ≤ 500 tokens, yellow ≥ `treeView.warnThreshold`
+(default 500), red ≥ `treeView.errorThreshold` (default 1500). The
+category headers carry the same icon system applied to the group total.
+
+**Right-click any file** to:
+
+- **Open** — jump to it in the editor.
+- **Run tokopt slim** — opens a side-by-side diff preview of the
+  slimmed version (markdown files only; JSON configs stay verbatim).
+- **Run tokopt detect** — runs `tokopt detect` on the containing
+  workspace folder and surfaces findings for just this file into the
+  output channel.
+
+**Title-bar button**: 🔄 **Refresh** — bumps generation, drops the
+per-folder cache, schedules a fresh `tokopt audit`. Useful after
+external file edits or for forcing a re-scan.
+
+**Palette command**: `tokopt: Show audit breakdown in output channel`
+— dumps the cached `tokopt audit --format=json` output for inspection
+without re-running the audit.
+
+### Lazy by default
+
+The TreeView does **zero work** on extension activation. The first
+audit only runs once you actually open the panel
+(`onView:tokoptTokenCost` is registered as an activation event, so
+opening the panel will bring the extension up if it wasn't already).
+Subsequent saves, watcher events, and workspace-folder changes
+schedule debounced refreshes — 250 ms coalescing window, single
+in-flight audit with mutex.
+
+### Welcome states
+
+When the tree has no data to show, a contextual welcome message
+explains why:
+
+- **Loading** — initial audit in progress.
+- **`tokopt` binary not found** — links to the install script.
+- **No customization files found** — explains which file types the
+  audit looks for.
+- **Audit failed** — links to the output channel for details.
+
+### Settings (3 keys)
+
+```jsonc
+{
+  // Show the Token Cost panel in the Explorer sidebar (default: true).
+  "tokopt.treeView.enabled": true,
+
+  // Yellow icon threshold for file + category rows.
+  "tokopt.treeView.warnThreshold": 500,
+
+  // Red icon threshold. Clamped to be >= warnThreshold at runtime.
+  "tokopt.treeView.errorThreshold": 1500
+}
+```
+
+### When the view is hidden
+
+The Token Cost view hides itself entirely when
+`tokopt.treeView.enabled` is `false` (via a `when:
+"config.tokopt.treeView.enabled"` clause on the view contribution).
+Set it back to `true` and the view reappears without a window reload.
+
+---
+
 ### Install the extension
 
 For now, install from a built `.vsix` (marketplace publishing TBD):

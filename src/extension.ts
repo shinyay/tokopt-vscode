@@ -1,9 +1,16 @@
+import * as path from "node:path";
 import * as vscode from "vscode";
 import { TokoptCodeLensProvider } from "./codeLens.js";
 import { CountResult } from "./tokopt.js";
 import { CustomizationKind, classifyCustomizationFile } from "./customizationFiles.js";
 import { TokoptDiagnosticManager } from "./diagnostics.js";
 import { TokoptStatusBarManager } from "./statusBar.js";
+import {
+  TokenCostTreeProvider,
+  TOKEN_COST_WATCHER_GLOB,
+  TokenCostNode,
+} from "./tokenCost.js";
+import { runTokoptDetect } from "./detect.js";
 import { resetWarnings } from "./warnings.js";
 import {
   SLIM_FIXABLE,
@@ -56,6 +63,39 @@ export function activate(context: vscode.ExtensionContext): void {
   const statusBar = new TokoptStatusBarManager(log);
   context.subscriptions.push(statusBar);
 
+  const tokenCost = new TokenCostTreeProvider(log, resolveBinary);
+  context.subscriptions.push(tokenCost);
+  const tokenCostView = vscode.window.createTreeView("tokoptTokenCost", {
+    treeDataProvider: tokenCost,
+    showCollapseAll: true,
+  });
+  context.subscriptions.push(tokenCostView);
+  context.subscriptions.push(
+    tokenCostView.onDidChangeVisibility((e) =>
+      tokenCost.onVisibilityChange(e.visible)
+    )
+  );
+  // The visibility event is not guaranteed to fire an initial "currently
+  // visible" tick. If activation happened via `onView:tokoptTokenCost`
+  // (user opened the panel as the trigger), the view is already visible
+  // when we get here; explicitly seed the latch.
+  if (tokenCostView.visible) {
+    tokenCost.onVisibilityChange(true);
+  }
+
+  // FileSystemWatcher for the token-cost tree — broader glob than the
+  // status bar's strict tax (audit walks recursively, so any *.agent.md
+  // or SKILL.md anywhere should refresh the tree).
+  const tokenCostWatcher = vscode.workspace.createFileSystemWatcher(
+    TOKEN_COST_WATCHER_GLOB
+  );
+  context.subscriptions.push(tokenCostWatcher);
+  context.subscriptions.push(
+    tokenCostWatcher.onDidCreate(() => tokenCost.scheduleRefresh()),
+    tokenCostWatcher.onDidChange(() => tokenCost.scheduleRefresh()),
+    tokenCostWatcher.onDidDelete(() => tokenCost.scheduleRefresh())
+  );
+
   // Watch the strict always-on locations for create/change/delete events
   // outside of save-listener coverage (external edits, file deletions,
   // git checkout flipping files in/out). Save events also fire here for
@@ -89,6 +129,7 @@ export function activate(context: vscode.ExtensionContext): void {
       statusBar.clearCache();
       void statusBar.refresh();
       void statusBar.updateCurrentFile();
+      tokenCost.clearCache();
     })
   );
 
@@ -160,6 +201,15 @@ export function activate(context: vscode.ExtensionContext): void {
         statusBar.scheduleRefresh();
       }
       void statusBar.updateCurrentFile();
+
+      // Token-cost tree: refresh when the saved file is anywhere the
+      // CLI walker would pick up (broader than status bar). Permissive
+      // classifier here is intentional — false positives are a wasted
+      // audit, false negatives leave the tree stale after the user
+      // creates a new customization file.
+      if (classifyCustomizationFile(doc.uri.fsPath)) {
+        tokenCost.scheduleRefresh();
+      }
     })
   );
 
@@ -187,6 +237,7 @@ export function activate(context: vscode.ExtensionContext): void {
       statusBar.clearCache();
       void statusBar.refresh();
       void statusBar.updateCurrentFile();
+      tokenCost.clearCache();
     })
   );
 
@@ -194,6 +245,10 @@ export function activate(context: vscode.ExtensionContext): void {
   void diagnostics.refresh();
   void statusBar.refresh();
   void statusBar.updateCurrentFile();
+  // Token-cost tree refresh is LAZY: deferred until the view becomes
+  // visible (rubber-duck H#1 — don't audit large workspaces for users
+  // who never open the panel). `onDidChangeVisibility` above handles
+  // the first-open trigger.
 
   // Click handler for the headline CodeLens.
   context.subscriptions.push(
@@ -244,6 +299,123 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("tokopt.showStatusBarBreakdown", () => {
       statusBar.showBreakdown();
+    })
+  );
+
+  // ---- Token-cost TreeView commands -----------------------------------
+  //
+  // openFile / slimFile / detectFile are wired to the per-row context
+  // menu via package.json `menus.view/item/context`. VS Code passes the
+  // resolved TokenCostNode as the first argument. Refresh + showAuditPanel
+  // are palette-visible and don't take arguments.
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tokopt.tree.refresh", () => {
+      // clearCache() bumps the generation counter, drops the per-folder
+      // map, and (if the view has ever been opened) triggers a fresh
+      // audit. The refresh() mutex coalesces concurrent calls so no
+      // explicit second refresh is needed here.
+      tokenCost.clearCache();
+    })
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "tokopt.tree.openFile",
+      async (node?: TokenCostNode) => {
+        if (!node || node.kind !== "file") return;
+        await vscode.commands.executeCommand(
+          "vscode.open",
+          vscode.Uri.file(node.absPath)
+        );
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "tokopt.tree.slimFile",
+      async (node?: TokenCostNode) => {
+        if (!node || node.kind !== "file") return;
+        if (!node.isMarkdown) {
+          // Defense in depth — the context menu only surfaces slim on
+          // tokoptFileMarkdown via the `when` clause in package.json,
+          // but a keybinding or executeCommand could still hit this.
+          vscode.window.showWarningMessage(
+            "tokopt slim only operates on markdown files. This file is not slim-safe."
+          );
+          return;
+        }
+        await vscode.commands.executeCommand(
+          "tokopt.applySlim",
+          vscode.Uri.file(node.absPath)
+        );
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "tokopt.tree.detectFile",
+      async (node?: TokenCostNode) => {
+        if (!node || node.kind !== "file") return;
+        // Per rubber-duck H#2: run workspace-scoped detect and filter
+        // to findings whose resolved location equals the selected file.
+        // tokopt detect's [path] arg is technically a directory in the
+        // current CLI — file-level invocation is undocumented and may
+        // produce odd relative locations.
+        const folder = vscode.workspace.getWorkspaceFolder(
+          vscode.Uri.file(node.absPath)
+        );
+        if (!folder) {
+          vscode.window.showWarningMessage(
+            "tokopt: cannot determine workspace folder for this file."
+          );
+          return;
+        }
+        const outcome = await runTokoptDetect(
+          resolveBinary(),
+          folder.uri.fsPath,
+          log
+        );
+        log.show(true);
+        log.appendLine("");
+        log.appendLine(
+          `=== tokopt detect (filtered to ${node.relPath}) ===`
+        );
+        if (outcome.kind !== "ok") {
+          log.appendLine(`detect did not return findings: ${outcome.kind}`);
+          if (outcome.kind === "error") log.appendLine(outcome.message);
+          return;
+        }
+        const filtered = outcome.findings.filter((f) => {
+          const resolved = path.resolve(folder.uri.fsPath, f.location);
+          return resolved === node.absPath;
+        });
+        if (filtered.length === 0) {
+          log.appendLine(
+            "(no findings for this file — congrats, it's clean)"
+          );
+          return;
+        }
+        for (const f of filtered) {
+          log.appendLine(
+            `[${f.severity.toUpperCase()}] ${f.id}: ${f.title}`
+          );
+          log.appendLine(`  recommendation: ${f.recommendation}`);
+          if (f.est_tokens_saved > 0) {
+            log.appendLine(
+              `  estimated savings: ${f.est_tokens_saved.toLocaleString()} tokens`
+            );
+          }
+        }
+      }
+    )
+  );
+
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tokopt.tree.showAuditPanel", () => {
+      tokenCost.showAuditDump(log);
     })
   );
 
