@@ -12,3 +12,9 @@ Thumbs.db
 # Test workspace artifacts
 tmp/
 *.log
+
+# VS Code extension build
+node_modules/
+out/
+*.vsix
+.vscode-test/

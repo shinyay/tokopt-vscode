@@ -4,6 +4,64 @@ All notable changes to **tokopt-vscode** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] — 2026-05-30
+
+First **real VS Code extension** release. Until now, `tokopt-vscode` shipped
+only Copilot Chat assets (agents/skills/prompts) via install scripts. v0.2.0
+introduces an actual `.vsix` extension that adds an **inline token-cost
+CodeLens** to recognised Copilot customization files.
+
+The two install surfaces are now siblings:
+
+| Surface | Installs | Use it when |
+|---|---|---|
+| `.vsix` extension (NEW) | CodeLens UI | You want token cost visible while editing |
+| `scripts/install-*.sh` | `.github/agents/`, `.github/skills/`, `.github/prompts/` | You want the `@token-doctor` / `/token-audit` UX in Copilot Chat |
+
+### Added
+
+- **CodeLens provider** — adds one inline annotation at the top of every
+  recognised customization file:
+  ```
+  ▸ 1,394 tokens (conditional, paid when agent invoked)
+  ```
+  Click it to open a modal with the breakdown plus suggested
+  `tokopt anatomy` / `tokopt detect` follow-up commands.
+  ([#6](https://github.com/shinyay/tokopt-vscode/issues/6))
+
+- **Recognised file kinds**:
+  - `copilot-instructions.md` → `always-on, paid every request`
+  - `*.agent.md` → `conditional, paid when agent invoked`
+  - `*.chatmode.md` → `conditional, paid when chat mode activated`
+  - `SKILL.md` → `on-demand, paid when skill loads`
+  - `*.prompt.md` → `on-demand, paid when slash command invoked`
+
+- **`format_version` schema dispatch**: the extension is the first
+  consumer of the `tokopt` CLI's `format_version: "v1"` JSON envelope
+  ([upstream PR #16](https://github.com/shinyay/getting-started-with-token-optimization/pull/16),
+  closes [tokopt-skills#5](https://github.com/shinyay/tokopt-skills/issues/5)).
+  Strict equality check — anything other than `"v1"` triggers a one-time
+  warning and silently disables CodeLens, so a future `v2` schema will
+  never crash the extension.
+
+- **Settings**:
+  - `tokopt.codeLens.enabled` (default `true`)
+  - `tokopt.binaryPath` (default `tokopt`, accepts absolute path)
+
+- **Graceful degradation**:
+  - `tokopt` CLI not in `PATH` → silent skip + one-time info message
+    pointing to install instructions.
+  - Subprocess error / malformed JSON → silent skip, logged to the
+    `tokopt` output channel.
+  - Dirty buffer (unsaved edits) → reuses last counted value; re-counts
+    on save. This avoids spawning `tokopt` per keystroke.
+
+### Engineering
+
+- TypeScript 5.4 + esbuild 0.24 bundle, single 5.6 KB `out/extension.js`.
+- VS Code engine `^1.85.0` (covers Insiders + Stable since Nov 2023).
+- 12 KB packaged `.vsix`.
+
 ## [0.1.2] — 2026-05-30
 
 Install-script polish release. Closes all remaining v0.1.x issues —
