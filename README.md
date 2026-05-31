@@ -464,9 +464,22 @@ If you run **both** tokopt-skills (CLI) AND tokopt-vscode (user-profile install)
 
 If you have both installed at user scope, VS Code Chat shows entries from `~/.copilot/agents/` + `~/.copilot/skills/` (this package), while the Copilot CLI loads from `~/.copilot/installed-plugins/_direct/tokopt-skills/` (the plugin). These are **separate code paths** and do not duplicate, but the wording / version may drift if updated independently. Re-run `install-user.sh` after pulling tokopt-vscode updates.
 
-### `slim-apply` listing
+### `slim-apply` listing — ✅ resolved upstream
 
-The CLI plugin has a known upstream issue ([copilot-cli#3546](https://github.com/github/copilot-cli/issues/3546)) where `slim-apply` is silently dropped from `/skills list`. This repo serves as an **A/B test**: if `/slim-apply` works correctly in VS Code Chat, the bug is CLI-loader-specific. Status is tracked in [tokopt-skills#4](https://github.com/shinyay/tokopt-skills/issues/4).
+> [!NOTE]
+> Both root causes that previously made `slim-apply` invisible in
+> `/skills list` have shipped fixes. **VS Code Chat is no longer
+> needed as an A/B fallback** — both surfaces now show the same 9
+> skills + 2 agents cleanly.
+>
+> | Layer | Issue | Status |
+> |---|---|---|
+> | Copilot CLI loader | [`github/copilot-cli#3546`](https://github.com/github/copilot-cli/issues/3546) — plugin-name vs `<owner>--<repo>` directory mismatch (originally fixed via a `_direct/<name>` symlink workaround) | ✅ Resolved in **Copilot CLI ≥ 1.0.57**; no symlink needed |
+> | `tokopt-skills` plugin | [`shinyay/tokopt-skills#1`](https://github.com/shinyay/tokopt-skills/issues/1) — `slim-apply` `SKILL.md` had an unquoted `: ` in YAML frontmatter `description:`, parsed as a mapping value and silently dropped | ✅ Fixed in [`tokopt-skills` v0.2.1](https://github.com/shinyay/tokopt-skills/releases/tag/v0.2.1); a `validate_frontmatter.py` CI guard prevents regression |
+>
+> If you are running **Copilot CLI < 1.0.57** or **tokopt-skills <
+> v0.2.1**, upgrade with `copilot plugin update tokopt-skills` (bare
+> name; `plugin upgrade <owner>/<repo>` does not exist).
 
 ---
 
