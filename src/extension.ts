@@ -515,12 +515,28 @@ export function activate(context: vscode.ExtensionContext): void {
     )
   );
 
+  // Log the effective state — AND the extension's own setting with VS Code's
+  // global `editor.codeLens`. Without this, `editor.codeLens=false` silently
+  // suppresses all CodeLens rendering while the log still claims it's enabled,
+  // misleading anyone debugging missing CodeLens. See
+  // https://github.com/shinyay/tokopt-vscode/issues/20.
+  const tokoptCodeLensEnabled = vscode.workspace
+    .getConfiguration("tokopt")
+    .get<boolean>("codeLens.enabled", true);
+  const editorCodeLensEnabled = vscode.workspace
+    .getConfiguration("editor")
+    .get<boolean>("codeLens", true);
+  const codeLensEffective = tokoptCodeLensEnabled && editorCodeLensEnabled;
+  const codeLensSuppressionHint =
+    tokoptCodeLensEnabled && !editorCodeLensEnabled
+      ? " (global editor.codeLens=false suppresses rendering)"
+      : "";
+  const diagnosticsEnabled = vscode.workspace
+    .getConfiguration("tokopt")
+    .get<boolean>("diagnostics.enabled", true);
+
   log.appendLine(
-    `tokopt-vscode activated (CodeLens enabled: ${vscode.workspace
-      .getConfiguration("tokopt")
-      .get<boolean>("codeLens.enabled", true)}, Diagnostics enabled: ${vscode.workspace
-      .getConfiguration("tokopt")
-      .get<boolean>("diagnostics.enabled", true)}, Quick Fix: ${SLIM_FIXABLE.size} slim-fixable rule(s) registered)`
+    `tokopt-vscode activated (CodeLens enabled: ${codeLensEffective}${codeLensSuppressionHint}, Diagnostics enabled: ${diagnosticsEnabled}, Quick Fix: ${SLIM_FIXABLE.size} slim-fixable rule(s) registered)`
   );
 }
 
