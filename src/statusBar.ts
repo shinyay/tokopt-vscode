@@ -248,10 +248,11 @@ export class TokoptStatusBarManager implements vscode.Disposable {
       this.item.hide();
       return;
     }
-    if (this.state.perFile.length === 0 && this.state.errorCount === 0) {
-      this.item.hide();
-      return;
-    }
+    // Zero-state (no always-on customization files found, no errors) is the
+    // healthiest possible state — render a positive confirmation rather than
+    // hiding silently. Hiding made `tokopt.showStatusBarBreakdown` unreachable
+    // for the repos that most benefit from confirming "yes, tax is really 0".
+    // See https://github.com/shinyay/tokopt-vscode/issues/19.
     this.render(config);
   }
 
@@ -469,15 +470,25 @@ export class TokoptStatusBarManager implements vscode.Disposable {
       config.get<number>("statusBar.errorThreshold", 1500)
     );
     const { totalTokens, errorCount, perFile } = this.state;
+    const isZeroState = perFile.length === 0 && errorCount === 0;
 
     const errorMarker = errorCount > 0 ? " $(warning)" : "";
-    let text = `$(file-text) ${totalTokens.toLocaleString()} tokens always-on${errorMarker}`;
+    let text: string;
+    if (isZeroState) {
+      // Positive confirmation for the healthiest state. Codicon `$(check)`
+      // renders as a green checkmark in the status bar.
+      text = "$(check) 0 tokens always-on";
+    } else {
+      text = `$(file-text) ${totalTokens.toLocaleString()} tokens always-on${errorMarker}`;
+    }
     if (this.currentFile && !this.isAlwaysOnPath(this.currentFile.path)) {
       text += ` / current: ${this.currentFile.tokens.toLocaleString()}`;
     }
     this.item.text = text;
 
-    if (totalTokens >= errorThreshold) {
+    if (isZeroState) {
+      this.item.backgroundColor = undefined;
+    } else if (totalTokens >= errorThreshold) {
       this.item.backgroundColor = new vscode.ThemeColor(
         "statusBarItem.errorBackground"
       );
@@ -491,21 +502,39 @@ export class TokoptStatusBarManager implements vscode.Disposable {
 
     const tooltip = new vscode.MarkdownString(undefined, true);
     tooltip.isTrusted = false;
-    tooltip.appendMarkdown(
-      `**tokopt — Always-on tax: ${totalTokens.toLocaleString()} tokens**\n\n`
-    );
-    tooltip.appendMarkdown(
-      `Paid on every Copilot request, multiplied by every turn of every conversation.\n\n`
-    );
-    tooltip.appendMarkdown(
-      `Files counted: ${perFile.length}`
-    );
-    if (errorCount > 0) {
+    if (isZeroState) {
       tooltip.appendMarkdown(
-        ` (${errorCount} file${errorCount === 1 ? "" : "s"} failed to count — see "tokopt" output channel)`
+        `**tokopt — Always-on tax: 0 tokens** $(check)\n\n`
       );
+      tooltip.appendMarkdown(
+        `No Copilot customization files found at the strict always-on locations:\n\n`
+      );
+      tooltip.appendMarkdown(
+        `- \`copilot-instructions.md\`, \`AGENTS.md\`, \`instructions.md\`\n`
+      );
+      tooltip.appendMarkdown(
+        `- in each workspace folder root and \`.github/\` subdirectory\n\n`
+      );
+      tooltip.appendMarkdown(
+        `This is the healthiest possible state — every Copilot request starts with the model's stock context, no per-call overhead from your repo.\n\n`
+      );
+    } else {
+      tooltip.appendMarkdown(
+        `**tokopt — Always-on tax: ${totalTokens.toLocaleString()} tokens**\n\n`
+      );
+      tooltip.appendMarkdown(
+        `Paid on every Copilot request, multiplied by every turn of every conversation.\n\n`
+      );
+      tooltip.appendMarkdown(
+        `Files counted: ${perFile.length}`
+      );
+      if (errorCount > 0) {
+        tooltip.appendMarkdown(
+          ` (${errorCount} file${errorCount === 1 ? "" : "s"} failed to count — see "tokopt" output channel)`
+        );
+      }
+      tooltip.appendMarkdown(`\n\n`);
     }
-    tooltip.appendMarkdown(`\n\n`);
     tooltip.appendMarkdown(
       `Thresholds: warn ≥ ${warnThreshold.toLocaleString()}, error ≥ ${errorThreshold.toLocaleString()}\n\n`
     );

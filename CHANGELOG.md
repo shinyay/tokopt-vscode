@@ -4,6 +4,23 @@ All notable changes to **tokopt-vscode** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.2] — 2026-06-03
+
+Two usability/observability bug fixes — the `tokopt.showStatusBarBreakdown` command becomes reachable on healthy 0-tax repos, and the activation log no longer lies about CodeLens being enabled when VS Code's global `editor.codeLens` setting suppresses rendering.
+
+### Fixed
+
+- **Status bar: positive zero-state render** ([#19](https://github.com/shinyay/tokopt-vscode/issues/19)) — on repos with `always-on tax = 0` (the healthiest possible state — no `copilot-instructions.md` / `AGENTS.md` / `instructions.md` at workspace root or `.github/`) the status-bar item is no longer hidden. It now renders `$(check) 0 tokens always-on` with a neutral background, and the hover tooltip explains exactly which 6 locations × 3 basenames were scanned. Previously the item was hidden AND the `tokopt.showStatusBarBreakdown` command was palette-gated, leaving users with no way to confirm "yes, the scan ran and tax really is zero" — they couldn't distinguish between "extension is broken" and "your repo is genuinely clean".
+
+- **Command palette: `Show always-on tax breakdown` now discoverable** ([#19](https://github.com/shinyay/tokopt-vscode/issues/19)) — `package.json` `menus.commandPalette` entry for `tokopt.showStatusBarBreakdown` changed from `"when": "false"` (hard-hidden) to `"when": "config.tokopt.statusBar.enabled"` (visible whenever the status bar feature is on). Belt-and-braces with the zero-state render: even if a user right-click-hides the status-bar item, they can still invoke the breakdown from the palette.
+
+- **Activation log: effective CodeLens state** ([#20](https://github.com/shinyay/tokopt-vscode/issues/20)) — the activation log line previously logged only `tokopt.codeLens.enabled`, claiming `CodeLens enabled: true` even when VS Code's global `editor.codeLens=false` silently suppressed all CodeLens rendering. The log now AND-s both settings and shows the effective state. When the extension wants CodeLens on but the global suppresses it, an explicit hint is appended: `(global editor.codeLens=false suppresses rendering)`. Users debugging "tokopt CodeLens is broken" now get a correct signal pointing them at their actual setting.
+
+### Compatibility
+
+- Status-bar zero-state render is **additive** — repos with any always-on customization files render exactly as before (same text format, same thresholds, same colors).
+- Activation log format change is **observability-only**; no behavior depends on parsing this line.
+
 ## [0.6.1] — 2026-06-03
 
 Fixes a critical silent-failure bug ([#18](https://github.com/shinyay/tokopt-vscode/issues/18)): on VS Code Insiders 1.117+ the CodeLens and Quick Fix providers stopped rendering on the extension's primary target files (`*.agent.md`, `copilot-instructions.md`, `*.chatmode.md`) because VS Code and the official `github.copilot-chat` extension now register dedicated languageIds (`agent`, `instructions`, `chatmode`) for those filename patterns. The `DocumentSelector`s matched `language: "markdown"` only, so providers were registered against the wrong language slot — Diagnostics still worked (gated by `source === "tokopt"`), but CodeLens + Quick Fix were silently absent. Manually flipping the editor language to `Markdown` worked around it.
