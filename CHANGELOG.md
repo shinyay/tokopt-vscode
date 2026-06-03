@@ -4,6 +4,20 @@ All notable changes to **tokopt-vscode** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Added
+
+- **CI workflow** (`.github/workflows/ci.yml`) — runs on every pull request and push to `main`. Steps: `npm ci` → `npm run typecheck` → `npm run build` → `npm run package` on `ubuntu-latest` / Node 22, then uploads the built `.vsix` as a workflow artifact (14-day retention) so reviewers can download and manually smoke-test extension behaviour before merging. Closes the regression-risk gap exposed by v0.6.0 / v0.6.1 / v0.6.2 all shipping with zero CI gates.
+
+- **Release workflow** (`.github/workflows/release.yml`) — triggers on `v*` tag pushes. Verifies `package.json` `version` matches the tag (refuses to release on drift), runs the full build chain, extracts the matching `## [X.Y.Z]` section from `CHANGELOG.md` via `awk` (refuses to release if absent), and creates a GitHub Release marked `--latest` with the freshly-built `.vsix` attached. Replaces the manual `gh release create` step in the locked PR ceremony. Uses only the default `GITHUB_TOKEN` (no PAT, no marketplace publish — distribution model remains GitHub-Releases-only).
+
+- **CI badge** — added to the top of `README.md` next to existing License / Format / VS Code badges. Public proof of green build state.
+
+### Changed
+
+- **`.vscodeignore`** — consolidated `.github/agents/**`, `.github/skills/**`, `.github/prompts/**` entries into a single `.github/**` exclusion. Side-effect: the new `.github/workflows/*.yml` files are also kept out of the packaged `.vsix` (otherwise they would have bundled an extra ~1.5 KB of CI-only YAML into every install).
+
 ## [0.6.2] — 2026-06-03
 
 Two usability/observability bug fixes — the `tokopt.showStatusBarBreakdown` command becomes reachable on healthy 0-tax repos, and the activation log no longer lies about CodeLens being enabled when VS Code's global `editor.codeLens` setting suppresses rendering.
