@@ -4,6 +4,28 @@ All notable changes to **tokopt-vscode** will be documented in this file.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) and
 this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.1] — 2026-06-03
+
+Fixes a critical silent-failure bug ([#18](https://github.com/shinyay/tokopt-vscode/issues/18)): on VS Code Insiders 1.117+ the CodeLens and Quick Fix providers stopped rendering on the extension's primary target files (`*.agent.md`, `copilot-instructions.md`, `*.chatmode.md`) because VS Code and the official `github.copilot-chat` extension now register dedicated languageIds (`agent`, `instructions`, `chatmode`) for those filename patterns. The `DocumentSelector`s matched `language: "markdown"` only, so providers were registered against the wrong language slot — Diagnostics still worked (gated by `source === "tokopt"`), but CodeLens + Quick Fix were silently absent. Manually flipping the editor language to `Markdown` worked around it.
+
+### Fixed
+
+- **CodeLens registration** — `codeLensSelector` (`src/extension.ts`) now matches the markdown family (`markdown`, `agent`, `instructions`, `chatmode`) instead of `markdown` only. Reuses a shared `COPILOT_CUSTOMIZATION_LANGS` constant so future surfaces stay in sync.
+  ([#18](https://github.com/shinyay/tokopt-vscode/issues/18))
+
+- **Quick Fix registration** — `codeActionSelector` (`src/extension.ts`) widens the prose-family entries to the same four languageIds; the data-format entries (`json` / `jsonc` / `yaml`) for MCP config quick-fixes are unchanged.
+  ([#18](https://github.com/shinyay/tokopt-vscode/issues/18))
+
+- **Slim safety guard** — `isSlimSafeTarget()` (`src/extension.ts`) now accepts all four markdown-family languageIds. Previously, programmatic invocations of `tokopt.applySlim` / `tokopt.previewSlim` (keybinding, `executeCommand`) on `*.agent.md` files with `languageId="agent"` were rejected with a misleading "agent files are not slim-safe" error even though the file is markdown on disk and the slim pipeline routes it safely via path-based emphasis detection.
+  ([#18](https://github.com/shinyay/tokopt-vscode/issues/18))
+
+- **Activation events** — `package.json` `activationEvents` adds `onLanguage:agent`, `onLanguage:instructions`, `onLanguage:chatmode` as belt-and-braces complements to the existing 9 `workspaceContains` globs. Covers the edge case of a stray customization file opened outside any workspace match.
+  ([#18](https://github.com/shinyay/tokopt-vscode/issues/18))
+
+### Compatibility
+
+- On older VS Code versions where the new languageIds are not registered, the additional `DocumentSelector` entries are simply unused — `markdown` still matches everything as a fallback. No behavioral regression on pre-1.117 installs.
+
 ## [0.6.0] — 2026-05-30
 
 Adds a **Token Cost TreeView** in the Explorer sidebar — the fifth

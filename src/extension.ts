@@ -27,6 +27,34 @@ function resolveBinary(): string {
 }
 
 /**
+ * Markdown-family languageIds that hold Copilot customization prose.
+ *
+ * VS Code Insiders 1.117+ and the official `github.copilot-chat` extension
+ * register dedicated languageIds for these filename patterns:
+ *   - `agent`        → `*.agent.md`
+ *   - `instructions` → `copilot-instructions.md`, `instructions.md`
+ *   - `chatmode`     → `*.chatmode.md`
+ *
+ * Providers that previously matched `language: "markdown"` only would
+ * silently fail on the exact files this extension is most valuable for.
+ * See https://github.com/shinyay/tokopt-vscode/issues/18.
+ *
+ * On older VS Code versions these languageIds are not registered, and
+ * the entries are simply unused (no negative effect on coverage because
+ * `markdown` still matches everything as a fallback there).
+ */
+const COPILOT_CUSTOMIZATION_LANGS: readonly vscode.DocumentFilter[] = [
+  { language: "markdown", scheme: "file" },
+  { language: "agent", scheme: "file" },
+  { language: "instructions", scheme: "file" },
+  { language: "chatmode", scheme: "file" },
+];
+
+const COPILOT_CUSTOMIZATION_LANG_IDS: ReadonlySet<string> = new Set(
+  COPILOT_CUSTOMIZATION_LANGS.map((f) => f.language as string)
+);
+
+/**
  * Defense-in-depth check matching the SLIM_FIXABLE allow-list semantics.
  * The CodeActionProvider only offers Apply/Preview when a SLIM_FIXABLE
  * diagnostic is present (all 3 of which target markdown). This guard
@@ -34,9 +62,14 @@ function resolveBinary(): string {
  * `tokopt.applySlim` / `tokopt.previewSlim` (e.g. keybinding, another
  * extension calling executeCommand) so that a JSON / YAML MCP config
  * cannot be silently rewritten through TonForm.
+ *
+ * Accepts the four markdown-family languageIds because Copilot
+ * customization files (`*.agent.md`, `copilot-instructions.md`,
+ * `*.chatmode.md`) are markdown-on-disk; the slim pipeline already
+ * routes them safely via path-based emphasis detection.
  */
 function isSlimSafeTarget(doc: vscode.TextDocument): boolean {
-  if (doc.languageId === "markdown") {
+  if (COPILOT_CUSTOMIZATION_LANG_IDS.has(doc.languageId)) {
     return true;
   }
   const lower = doc.uri.fsPath.toLowerCase();
@@ -142,21 +175,25 @@ export function activate(context: vscode.ExtensionContext): void {
     )
   );
 
-  // Markdown selector — provider does its own path-based filtering inside.
+  // Markdown-family selector — provider does its own path-based filtering
+  // inside. Covers `markdown` plus the dedicated languageIds VS Code 1.117+
+  // assigns to Copilot customization files (see COPILOT_CUSTOMIZATION_LANGS
+  // and #18 for the silent-failure history).
   const codeLensSelector: vscode.DocumentSelector = [
-    { language: "markdown", scheme: "file" },
+    ...COPILOT_CUSTOMIZATION_LANGS,
   ];
   context.subscriptions.push(
     vscode.languages.registerCodeLensProvider(codeLensSelector, provider)
   );
 
-  // Quick-Fix provider deliberately covers markdown + json + yaml because
-  // detect findings target all three (markdown for instructions/agents,
-  // json/yaml for MCP config). The provider itself only returns actions
-  // when context.diagnostics contains a `source === "tokopt"` entry, so
-  // there's no per-file gating to think about — the data does the work.
+  // Quick-Fix provider deliberately covers the markdown family + json + yaml
+  // because detect findings target all of them (markdown family for
+  // instructions/agents/chatmodes, json/yaml for MCP config). The provider
+  // itself only returns actions when context.diagnostics contains a
+  // `source === "tokopt"` entry, so there's no per-file gating to think
+  // about — the data does the work.
   const codeActionSelector: vscode.DocumentSelector = [
-    { language: "markdown", scheme: "file" },
+    ...COPILOT_CUSTOMIZATION_LANGS,
     { language: "json", scheme: "file" },
     { language: "jsonc", scheme: "file" },
     { language: "yaml", scheme: "file" },
