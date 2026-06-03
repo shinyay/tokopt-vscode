@@ -2,6 +2,7 @@
 
 > **VS Code companion to [`tokopt`](https://github.com/shinyay/tokopt)** — ships both a `.vsix` extension (inline token-cost **CodeLens**) and Copilot Chat assets (`@token-doctor`, `/token-audit`, etc.) for the [`tokopt-skills`](https://github.com/shinyay/tokopt-skills) ecosystem.
 
+[![CI](https://github.com/shinyay/tokopt-vscode/actions/workflows/ci.yml/badge.svg)](https://github.com/shinyay/tokopt-vscode/actions/workflows/ci.yml)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![Format: Agent Skills](https://img.shields.io/badge/format-agentskills.io-blue)](https://agentskills.io)
 [![VS Code](https://img.shields.io/badge/VS%20Code-Copilot%20Chat-007ACC)](https://code.visualstudio.com/docs/copilot/customization/overview)

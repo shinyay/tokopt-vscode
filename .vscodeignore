@@ -13,9 +13,7 @@ node_modules/**
 scripts/install-user.sh
 scripts/install-workspace.sh
 scripts/uninstall.sh
-.github/agents/**
-.github/skills/**
-.github/prompts/**
+.github/**
 docs/**
 tmp/**
 *.log
