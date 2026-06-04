@@ -6,6 +6,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.6.4] — 2026-06-05
+
+### Changed
+
+- **CodeLens detail message: anatomy positional form** — the suggested follow-up command in the headline CodeLens info modal (`src/extension.ts` line 308) now uses `tokopt anatomy "${file}"` (positional, auto-classifies the segment based on filename and path) instead of the legacy `tokopt anatomy --user "${file}"` (always-user fallback). Closes the loop on the `tokopt v0.6.0` binary release ([source PR #108](https://github.com/shinyay/getting-started-with-token-optimization/pull/108)) by surfacing the new auto-classification feature directly in the editor.
+
+### Compatibility
+
+- Requires `tokopt v0.6.0+` for the positional `anatomy` form (recommended: v0.6.1 which also ships the `tokopt version` subcommand). Older binaries (≤ v0.5.1) treat the file argument as a flag value and return an error; users running pre-v0.6.0 should upgrade via `curl -fsSL https://raw.githubusercontent.com/shinyay/tokopt/main/scripts/install.sh | sh`.
+- The extension does not invoke `anatomy` directly yet — adding a runnable `tokopt.tree.anatomyFile` command (mirroring `tokopt.tree.detectFile`) is tracked separately.
+
 ## [0.6.3] — 2026-06-04
 
 Closes the loop on the `tokopt v0.5.1` binary release ([source PR #106](https://github.com/shinyay/getting-started-with-token-optimization/pull/106)) by retiring the workspace-scoped Quick Detect workaround in favor of native per-file invocation, and bundles the previously-unreleased CI / release automation from Phase 11.C.
