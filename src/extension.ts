@@ -305,7 +305,7 @@ export function activate(context: vscode.ExtensionContext): void {
               ? "  • Only paid when the agent is explicitly invoked."
               : "  • Only paid when the skill is triggered or the slash command is run.",
           ``,
-          `Run \`tokopt anatomy --user "${uri.fsPath}"\` for a per-segment breakdown,`,
+          `Run \`tokopt anatomy "${uri.fsPath}"\` for a per-segment breakdown (auto-classifies the segment),`,
           `or \`tokopt detect "${uri.fsPath}"\` to surface structural anti-patterns.`,
         ].join("\n");
         vscode.window.showInformationMessage(detail, { modal: true });
