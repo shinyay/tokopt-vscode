@@ -1,4 +1,3 @@
-import * as path from "node:path";
 import * as vscode from "vscode";
 import { TokoptCodeLensProvider } from "./codeLens.js";
 import { CountResult } from "./tokopt.js";
@@ -396,46 +395,40 @@ export function activate(context: vscode.ExtensionContext): void {
       "tokopt.tree.detectFile",
       async (node?: TokenCostNode) => {
         if (!node || node.kind !== "file") return;
-        // Per rubber-duck H#2: run workspace-scoped detect and filter
-        // to findings whose resolved location equals the selected file.
-        // tokopt detect's [path] arg is technically a directory in the
-        // current CLI — file-level invocation is undocumented and may
-        // produce odd relative locations.
-        const folder = vscode.workspace.getWorkspaceFolder(
-          vscode.Uri.file(node.absPath)
-        );
-        if (!folder) {
-          vscode.window.showWarningMessage(
-            "tokopt: cannot determine workspace folder for this file."
-          );
-          return;
-        }
+        // tokopt v0.5.1+ supports `detect <FILE>` with binary-side root
+        // inference + greppy narrowing (shipped in PR #106 of
+        // shinyay/getting-started-with-token-optimization). Older
+        // binaries return a v1 error envelope which surfaces as
+        // outcome.kind === "error" with a "FILE_NOT_FOUND" /
+        // "not a directory" message — we add an upgrade hint below.
         const outcome = await runTokoptDetect(
           resolveBinary(),
-          folder.uri.fsPath,
+          node.absPath,
           log
         );
         log.show(true);
         log.appendLine("");
-        log.appendLine(
-          `=== tokopt detect (filtered to ${node.relPath}) ===`
-        );
+        log.appendLine(`=== tokopt detect (${node.relPath}) ===`);
         if (outcome.kind !== "ok") {
           log.appendLine(`detect did not return findings: ${outcome.kind}`);
-          if (outcome.kind === "error") log.appendLine(outcome.message);
+          if (outcome.kind === "error") {
+            log.appendLine(outcome.message);
+            if (/not a directory|FILE_NOT_FOUND/i.test(outcome.message)) {
+              log.appendLine(
+                "Hint: per-file Quick Detect requires tokopt v0.5.1 or newer. " +
+                  "Upgrade with: curl -fsSL https://raw.githubusercontent.com/shinyay/tokopt/main/scripts/install.sh | sh"
+              );
+            }
+          }
           return;
         }
-        const filtered = outcome.findings.filter((f) => {
-          const resolved = path.resolve(folder.uri.fsPath, f.location);
-          return resolved === node.absPath;
-        });
-        if (filtered.length === 0) {
+        if (outcome.findings.length === 0) {
           log.appendLine(
             "(no findings for this file — congrats, it's clean)"
           );
           return;
         }
-        for (const f of filtered) {
+        for (const f of outcome.findings) {
           log.appendLine(
             `[${f.severity.toUpperCase()}] ${f.id}: ${f.title}`
           );
