@@ -6,6 +6,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.6.3] — 2026-06-04
+
+Closes the loop on the `tokopt v0.5.1` binary release ([source PR #106](https://github.com/shinyay/getting-started-with-token-optimization/pull/106)) by retiring the workspace-scoped Quick Detect workaround in favor of native per-file invocation, and bundles the previously-unreleased CI / release automation from Phase 11.C.
+
+### Changed
+
+- **Token Cost TreeView "Quick Detect" — direct per-file invocation** — `tokopt.tree.detectFile` (`src/extension.ts`) no longer scans the whole workspace and filters findings client-side. It now calls `tokopt detect <FILE>` directly, relying on the binary's 5-tier root inference + greppy narrowing (shipped in `tokopt v0.5.1`). Net result: faster (no full-workspace walk per click), more accurate (no path.resolve symlink edge cases), and ~25% less code in the handler. Older `tokopt` binaries (≤ v0.4.0) handed a file path return a v1 error envelope — the extension surfaces it with an explicit upgrade hint instead of failing silently.
+
+- **`runTokoptDetect` parses v1 error envelopes** — `src/detect.ts` factored out a `parseDetectPayload(stdout, log)` helper that handles both the success path AND `err.stdout` captured from non-zero exits. Previously, when `tokopt` exited non-zero (any error envelope, e.g. `FILE_NOT_FOUND`), `execFile` rejected and the structured payload was discarded — the caller saw a generic `tokopt detect failed: Error: Command failed...` and lost the binary's actual diagnostic. The new helper recognizes the v1 `{format_version: "v1", error: {...}}` shape and returns `{kind: "error", message}` with the binary's message intact. Improves error UX for both Quick Detect and the diagnostics workspace scan.
+
+- **`runTokoptDetect` signature: `rootDir` → `target`** — purely cosmetic; the parameter accepts both directories and files now (with `tokopt v0.5.1+`).
+
+- **`Finding.location` doc** — clarified that in file mode the path is relative to the detector's inferred root (not the CLI argument).
+
 ### Added
 
 - **CI workflow** (`.github/workflows/ci.yml`) — runs on every pull request and push to `main`. Steps: `npm ci` → `npm run typecheck` → `npm run build` → `npm run package` on `ubuntu-latest` / Node 22, then uploads the built `.vsix` as a workflow artifact (14-day retention) so reviewers can download and manually smoke-test extension behaviour before merging. Closes the regression-risk gap exposed by v0.6.0 / v0.6.1 / v0.6.2 all shipping with zero CI gates.
@@ -14,9 +28,14 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 - **CI badge** — added to the top of `README.md` next to existing License / Format / VS Code badges. Public proof of green build state.
 
-### Changed
+### Changed (CI / packaging)
 
 - **`.vscodeignore`** — consolidated `.github/agents/**`, `.github/skills/**`, `.github/prompts/**` entries into a single `.github/**` exclusion. Side-effect: the new `.github/workflows/*.yml` files are also kept out of the packaged `.vsix` (otherwise they would have bundled an extra ~1.5 KB of CI-only YAML into every install).
+
+### Compatibility
+
+- **Per-file Quick Detect requires `tokopt v0.5.1` or newer.** Older binaries return a v1 `FILE_NOT_FOUND` error envelope which the extension surfaces in the Output channel with an explicit upgrade hint (`curl ... install.sh | sh`). All other extension features (CodeLens, Diagnostics, Quick Fix, Status bar, workspace-scoped detect from the Diagnostics manager) continue to work with `tokopt v0.4.0+`.
+- Diagnostics manager (`src/diagnostics.ts`) is unchanged behaviorally — it still scans by workspace folder. The improved error-envelope parsing in `runTokoptDetect` produces cleaner log messages but does not change which findings get published to the Problems panel.
 
 ## [0.6.2] — 2026-06-03
 
