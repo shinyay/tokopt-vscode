@@ -30,17 +30,30 @@ function resolveBinary(): string {
  *
  * VS Code Insiders 1.117+ and the official `github.copilot-chat` extension
  * register dedicated languageIds for these filename patterns:
- *   - `agent`        → `*.agent.md`
+ *   - `agent`        → `*.agent.md` (legacy)
+ *   - `chatagent`    → `*.agent.md` AND `*.chatmode.md` (current — GH Copilot
+ *                       Chat 1.125+ uses this internal id; "Agent" is the
+ *                       display name only — see #28 and #29)
  *   - `instructions` → `copilot-instructions.md`, `instructions.md`
- *   - `chatmode`     → `*.chatmode.md`
+ *   - `chatmode`     → `*.chatmode.md` (legacy — being deprecated by GH
+ *                       Copilot Chat to `chatagent`)
  *   - `prompt`       → `*.prompt.md`              (added in v0.6.5, #26)
  *   - `skill`        → `SKILL.md`                 (added in v0.6.5, #27)
  *
  * Providers that previously matched `language: "markdown"` only would
  * silently fail on the exact files this extension is most valuable for.
- * See https://github.com/shinyay/tokopt-vscode/issues/18 (instructions/agent),
- * https://github.com/shinyay/tokopt-vscode/issues/26 (prompt),
- * and https://github.com/shinyay/tokopt-vscode/issues/27 (skill).
+ * See:
+ *   - https://github.com/shinyay/tokopt-vscode/issues/18 (instructions/agent)
+ *   - https://github.com/shinyay/tokopt-vscode/issues/26 (prompt)
+ *   - https://github.com/shinyay/tokopt-vscode/issues/27 (skill)
+ *   - https://github.com/shinyay/tokopt-vscode/issues/28 (chatagent vs agent —
+ *                       the GH Copilot Chat extension exposes display name
+ *                       "Agent" but internal id `chatagent`, which a naive
+ *                       inspector cannot see without clicking through
+ *                       Select Language Mode)
+ *   - https://github.com/shinyay/tokopt-vscode/issues/29 (chatmode→agent
+ *                       deprecation: `*.chatmode.md` now also gets
+ *                       `chatagent` languageId via the same registration)
  *
  * On older VS Code versions these languageIds are not registered, and
  * the entries are simply unused (no negative effect on coverage because
@@ -49,6 +62,7 @@ function resolveBinary(): string {
 const COPILOT_CUSTOMIZATION_LANGS: readonly vscode.DocumentFilter[] = [
   { language: "markdown", scheme: "file" },
   { language: "agent", scheme: "file" },
+  { language: "chatagent", scheme: "file" },
   { language: "instructions", scheme: "file" },
   { language: "chatmode", scheme: "file" },
   { language: "prompt", scheme: "file" },
