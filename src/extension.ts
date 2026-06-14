@@ -33,10 +33,14 @@ function resolveBinary(): string {
  *   - `agent`        → `*.agent.md`
  *   - `instructions` → `copilot-instructions.md`, `instructions.md`
  *   - `chatmode`     → `*.chatmode.md`
+ *   - `prompt`       → `*.prompt.md`              (added in v0.6.5, #26)
+ *   - `skill`        → `SKILL.md`                 (added in v0.6.5, #27)
  *
  * Providers that previously matched `language: "markdown"` only would
  * silently fail on the exact files this extension is most valuable for.
- * See https://github.com/shinyay/tokopt-vscode/issues/18.
+ * See https://github.com/shinyay/tokopt-vscode/issues/18 (instructions/agent),
+ * https://github.com/shinyay/tokopt-vscode/issues/26 (prompt),
+ * and https://github.com/shinyay/tokopt-vscode/issues/27 (skill).
  *
  * On older VS Code versions these languageIds are not registered, and
  * the entries are simply unused (no negative effect on coverage because
@@ -47,6 +51,8 @@ const COPILOT_CUSTOMIZATION_LANGS: readonly vscode.DocumentFilter[] = [
   { language: "agent", scheme: "file" },
   { language: "instructions", scheme: "file" },
   { language: "chatmode", scheme: "file" },
+  { language: "prompt", scheme: "file" },
+  { language: "skill", scheme: "file" },
 ];
 
 const COPILOT_CUSTOMIZATION_LANG_IDS: ReadonlySet<string> = new Set(
