@@ -6,6 +6,28 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.6.6] — 2026-06-15
+
+### Fixed
+
+- **CodeLens / Quick Fix now activate on `chatagent` languageId** — `*.agent.md` and `*.chatmode.md` files in VS Code Insiders 1.125+ are registered against internal languageId **`chatagent`** (display name `Agent`), NOT `agent`. The display name "Agent" misled both [#18](https://github.com/shinyay/tokopt-vscode/issues/18) (where `agent` was added) and v0.6.4-v0.6.5 contributors — it is not the same string as the internal id. Result: even after v0.6.5 (which added `prompt` and `skill`), CodeLens and Quick Fix still silently failed on **both** `*.agent.md` AND `*.chatmode.md` files. v0.6.6 closes the loop by adding `{language:"chatagent"}` to `COPILOT_CUSTOMIZATION_LANGS`. Closes [#28](https://github.com/shinyay/tokopt-vscode/issues/28) (agent CodeLens despite registration) and [#29](https://github.com/shinyay/tokopt-vscode/issues/29) (chatmode mis-classification → renamed to agents by GH Copilot Chat).
+  - **How the discovery was made**: Phase 16 manual verification using [`shinyay/tokopt-vscode-fixture`](https://github.com/shinyay/tokopt-vscode-fixture) (private) showed `*.prompt.md` and `SKILL.md` worked after v0.6.5, but `*.agent.md` and `*.chatmode.md` still failed. Clicking the status bar `Agent` indicator opened the **Select Language Mode** picker, which displays both name and identifier: `Agent (chatagent) - Configured Language`. The `(chatagent)` is the internal id; `Agent` is the display name. The legacy `{language:"agent"}` selector matches nothing on Insiders 1.125+ because no file ever gets that languageId.
+  - **GH Copilot Chat deprecation context**: `*.chatmode.md` files now render a warning "Chat modes have been renamed to agents. Please move this file to..." — chatmodes are being unified under the agent abstraction. As a side-effect, both file kinds share `chatagent`. A single selector addition therefore fixes both #28 and #29.
+  - `src/extension.ts` — `COPILOT_CUSTOMIZATION_LANGS` gains `{language:"chatagent"}` (now 7 entries). Doc comment extensively updated to enumerate display-name-vs-internal-id pitfalls and the deprecation timeline. The legacy `{language:"agent"}` and `{language:"chatmode"}` entries are preserved for backward compatibility with older VS Code versions where they still fire.
+  - `package.json` — `activationEvents` gains `onLanguage:chatagent`. The existing `workspaceContains:**/*.agent.md` and `workspaceContains:**/*.chatmode.md` continue to handle first-open activation.
+  - `src/customizationFiles.ts` — **no changes**. The cost classifier is languageId-agnostic (uses `endsWith()` / `basename`), so it already produces the correct labels (`*.agent.md` → "paid when agent invoked", `*.chatmode.md` → "paid when chat mode activated"). The bug was again purely that the providers never got asked.
+  - `COPILOT_CUSTOMIZATION_LANG_IDS` Set and `isSlimSafeTarget()` automatically pick up the addition (derived from the same array).
+
+### Open issues NOT addressed
+
+- [#30](https://github.com/shinyay/tokopt-vscode/issues/30) Suppress Quick Fix inserts the `tokopt:disable` comment at an unexpected position. Cosmetic; functionality unaffected. Tracked for a future PR.
+
+### Compatibility
+
+- Adding `chatagent` to `COPILOT_CUSTOMIZATION_LANGS` is **strictly additive**. Existing 6 selectors (markdown / agent / instructions / chatmode / prompt / skill) continue to match.
+- On VS Code versions that do not register `chatagent` (i.e. older than the GH Copilot Chat extension version that introduced the rename), the new selector simply no-ops; the legacy `agent` and `chatmode` selectors continue to handle those installations.
+- No `tokopt` binary version requirement change (still `v0.4.0+` for the bulk of the extension, `v0.5.1+` for per-file Quick Detect).
+
 ## [0.6.5] — 2026-06-14
 
 ### Fixed
