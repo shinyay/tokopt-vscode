@@ -6,6 +6,25 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.6.5] — 2026-06-14
+
+### Fixed
+
+- **CodeLens / Quick Fix / `isSlimSafeTarget` now activate on `prompt` and `skill` languageIds** — VS Code Insiders 1.117+ assigns `*.prompt.md` to `prompt` and `SKILL.md` to `skill` (not `markdown`), but the extension's DocumentSelector only covered `[markdown, agent, instructions, chatmode]`. Result: opening any `*.prompt.md` or `SKILL.md` in Insiders showed **no CodeLens at all**, and Cmd+. produced no tokopt Quick Fix actions. This is the same class of regression as the v0.6.0 → v0.6.1 fix for `instructions` ([#18](https://github.com/shinyay/tokopt-vscode/issues/18)); v0.6.5 closes the remaining two gaps. Closes [#26](https://github.com/shinyay/tokopt-vscode/issues/26) (prompt) and [#27](https://github.com/shinyay/tokopt-vscode/issues/27) (skill).
+  - `src/extension.ts` — `COPILOT_CUSTOMIZATION_LANGS` gains `{language:"prompt"}` and `{language:"skill"}`. Doc comment expanded to enumerate all six languageIds plus their filename patterns and the issues that drove each addition. Net change: +2 selectors, +5 comment lines.
+  - `package.json` — `activationEvents` gains `onLanguage:prompt` and `onLanguage:skill`. The existing `workspaceContains:**/*.prompt.md` and `workspaceContains:**/SKILL.md` entries continue to handle the first-open case before any language activation event fires.
+  - `src/customizationFiles.ts` — **no changes**. The cost classifier is languageId-agnostic (uses `endsWith()` / `basename`), so the `on-demand` label for both file kinds was already correct; the bug was purely that the providers never got a chance to ask.
+  - `COPILOT_CUSTOMIZATION_LANG_IDS` Set and `isSlimSafeTarget()` automatically pick up the additions (derived from the same array), so the `tokopt.applySlim` / `tokopt.previewSlim` guard for non-CodeAction invocations stays consistent.
+- **Bugs explicitly NOT addressed here** (separate work):
+  - [#28](https://github.com/shinyay/tokopt-vscode/issues/28) `*.agent.md` (languageId `agent`) — CodeLens still fails on Insiders 1.117+ despite `agent` being registered. Workaround: switch the file's language to Markdown manually. Root cause unknown; needs `vscode.languages.getLanguages()` instrumentation in a dev build.
+  - [#29](https://github.com/shinyay/tokopt-vscode/issues/29) `*.chatmode.md` mis-classified as `Agent` languageId in VS Code Insiders. Likely an Insiders default or a `contributes.languages` collision; not fixed in this PR.
+  - [#30](https://github.com/shinyay/tokopt-vscode/issues/30) Suppress Quick Fix inserts the `tokopt:disable` comment at a slightly unexpected position. Cosmetic; functionality unaffected.
+
+### Compatibility
+
+- Adding entries to `COPILOT_CUSTOMIZATION_LANGS` is **strictly additive**: existing `markdown` / `agent` / `instructions` / `chatmode` selectors continue to match. On older VS Code versions where `prompt` and `skill` languageIds are not registered, the new selectors simply do not match anything (silent no-op) and `markdown` continues to handle the fallback.
+- No `tokopt` binary version requirement change (still `v0.4.0+` for the bulk of the extension, `v0.5.1+` for per-file Quick Detect).
+
 ## [0.6.4] — 2026-06-05
 
 ### Changed
