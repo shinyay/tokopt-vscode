@@ -11,7 +11,7 @@ Two complementary install surfaces — pick either, or both:
 
 | Surface | What you get | Best for |
 |---|---|---|
-| **`.vsix` extension** (v0.2.0+) | Inline CodeLens (per-file token cost) + Diagnostics (anti-pattern findings in Problems panel) + Quick Fix (Cmd+. apply / preview / suppress) + Status bar (always-on tax for current workspace) on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md`, `AGENTS.md` | Editing customization files — see cost, anti-patterns, and one-click fixes ambiently |
+| **`.vsix` extension** (v0.2.0+) | Inline CodeLens (per-file token cost **+ AI Credit / USD cost**) + Diagnostics (anti-pattern findings in Problems panel) + Quick Fix (Cmd+. apply / preview / suppress) + Status bar (always-on tax **+ monthly cost**) + Token Cost TreeView + **Workspace Optimization Report** on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md`, `AGENTS.md` | Editing customization files — see cost, anti-patterns, and one-click fixes ambiently |
 | **`scripts/install-*.sh`** (v0.1.x) | `.github/agents/`, `.github/skills/`, `.github/prompts/` assets for Copilot Chat | Running `@token-doctor` / `/token-audit` in Copilot Chat |
 
 Both rely on the same [`tokopt`](https://github.com/shinyay/tokopt) Go CLI for measurement.
@@ -302,6 +302,64 @@ The Token Cost view hides itself entirely when
 `tokopt.treeView.enabled` is `false` (via a `when:
 "config.tokopt.treeView.enabled"` clause on the view contribution).
 Set it back to `true` and the view reappears without a window reload.
+
+---
+
+## 💰 Cost projection (`v0.7.0`)
+
+Token _counts_ are only half the story. In the metered-billing era
+(GitHub Copilot **AI Credits**, where `1 AIU = $0.01`), what you
+actually pay for is **cost**. Set `tokopt.creditModel` and every
+surface projects tokens into AI Credits (AIU) and dollars using the
+empirical rate card behind `tokopt --credit-model`:
+
+| Surface | What you see (model `gpt-5.5`) |
+|---|---|
+| **CodeLens** (always-on) | `▸ 630 tokens (always-on, paid every request)  ·  ≈ 0.197 AIU/req · ~$11.81/mo` |
+| **CodeLens** (conditional) | `… ·  ≈ 0.087 AIU/invocation` |
+| **CodeLens** (on-demand) | `… ·  ≈ 0.053 AIU/use` |
+| **Status bar** tooltip | `💸 Cost: ~4,523 AIU ≈ $45.23 / month at 200 requests/day` |
+| **TreeView** category tooltip | per-scope cost per request / month |
+| **Show breakdown** modal | full per-file cost math + monthly projection |
+
+The cost is **scope-aware**: an always-on file is multiplied by every
+request (so we show a monthly bill), while conditional / on-demand
+files are priced per invocation / per use.
+
+### Settings
+
+| Setting | Default | Effect |
+|---|---|---|
+| `tokopt.creditModel` | `none` | Rate-card model for cost projection. `none` disables it (counts only). |
+| `tokopt.requestsPerDay` | `200` | Requests/day assumed for the **monthly** always-on projection. |
+
+> [!NOTE]
+> Cost is **opt-in**. With `tokopt.creditModel = none` (the default),
+> every surface is byte-for-byte identical to v0.6.6 — the
+> `--credit-model` flag is not even passed to the CLI. Projections are
+> estimates from a Copilot-CLI-calibrated rate card; real billing
+> varies with cache hits, output, and reasoning tokens.
+
+---
+
+## 📈 Workspace Optimization Report (`v0.7.0`)
+
+Run **`tokopt: Show Optimization Report`** from the command palette, or
+click the 📊 button on the Token Cost view toolbar. It fuses
+`tokopt audit --credit-model` (where the tokens and cost are) with
+`tokopt detect` (what to trim and by how much) into a single markdown
+document opened in a new editor tab:
+
+1. **Where your tokens go** — cost-summary table per scope
+   (tokens + AIU + USD) plus the headline always-on monthly bill.
+2. **What to optimize** — every anti-pattern finding ranked by
+   estimated tokens saved, with a grand total and per-finding
+   recommended actions.
+3. **How to act** — points back to the Quick Fix / Problems-panel
+   workflow so you can fix and re-run to watch the numbers drop.
+
+With no credit model set, the report still renders (tokens-only) and
+tells you how to switch the cost columns on.
 
 ---
 

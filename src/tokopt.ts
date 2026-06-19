@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
+import { creditModelArgs } from "./credit.js";
 import { warnBinaryMissing, warnVersionMismatch } from "./warnings.js";
 
 const execFileAsync = promisify(execFile);
@@ -20,6 +21,11 @@ export interface CountResult {
   encoding: string;
   tokens: number;
   bytes: number;
+  /** Projected cost in nano-AIU. Present only when a credit model was
+   * passed and the CLI returned a `nano_aiu` field. 1 AIU = 1e9 nano-AIU. */
+  nanoAiu?: number;
+  /** The credit model used for the projection, echoed from the CLI. */
+  creditModel?: string;
 }
 
 export type CountOutcome =
@@ -43,12 +49,13 @@ function isErrnoException(e: unknown): e is NodeJS.ErrnoException {
 export async function runTokoptCount(
   binaryPath: string,
   filePath: string,
-  log: vscode.OutputChannel
+  log: vscode.OutputChannel,
+  creditModel?: string
 ): Promise<CountOutcome> {
   try {
     const { stdout } = await execFileAsync(
       binaryPath,
-      ["count", "--format=json", filePath],
+      ["count", "--format=json", ...creditModelArgs(creditModel), filePath],
       { timeout: 10_000, maxBuffer: 1024 * 1024 }
     );
 
@@ -95,6 +102,12 @@ export async function runTokoptCount(
         encoding: payload.encoding,
         tokens: payload.tokens,
         bytes: payload.bytes,
+        nanoAiu:
+          typeof payload.nano_aiu === "number" ? payload.nano_aiu : undefined,
+        creditModel:
+          typeof payload.credit_model === "string"
+            ? payload.credit_model
+            : undefined,
       },
     };
   } catch (err) {

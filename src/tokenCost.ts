@@ -1,6 +1,14 @@
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { runTokoptAudit, AuditFile, AuditResult } from "./audit.js";
+import {
+  formatAiu,
+  formatUsd,
+  nanoAiuToAiu,
+  nanoAiuToUsd,
+  projectMonthlyAiu,
+  projectMonthlyUsd,
+} from "./credit.js";
 
 const REFRESH_DEBOUNCE_MS = 250;
 const SCOPE_ORDER: AuditFile["scope"][] = [
@@ -127,11 +135,33 @@ export class TokenCostTreeProvider
       );
       item.id = `category:${node.scope}`;
       item.description = `${node.tokens.toLocaleString()} tokens · ${node.fileCount} file${node.fileCount === 1 ? "" : "s"}`;
-      item.tooltip = new vscode.MarkdownString(
+      let tooltipMd =
         `**${SCOPE_LABEL[node.scope]}** — ${SCOPE_DESCRIPTION[node.scope]}\n\n` +
-          `Total: **${node.tokens.toLocaleString()} tokens** across **${node.fileCount}** file${node.fileCount === 1 ? "" : "s"}.\n\n` +
-          `Warn threshold: ${warn.toLocaleString()} · Error threshold: ${error.toLocaleString()}`
-      );
+        `Total: **${node.tokens.toLocaleString()} tokens** across **${node.fileCount}** file${node.fileCount === 1 ? "" : "s"}.\n\n`;
+      const scopeNano = this.scopeNanoAiu(node.scope);
+      if (scopeNano !== null && scopeNano > 0) {
+        const cfg = vscode.workspace.getConfiguration("tokopt");
+        const model = cfg.get<string>("creditModel", "none");
+        if (node.scope === "always-on") {
+          const requestsPerDay = cfg.get<number>("requestsPerDay", 200);
+          tooltipMd +=
+            `💸 **Cost (${model})**: ${formatAiu(nanoAiuToAiu(scopeNano))} ≈ ${formatUsd(
+              nanoAiuToUsd(scopeNano)
+            )} per request → ~${formatAiu(
+              projectMonthlyAiu(scopeNano, requestsPerDay)
+            )} ≈ ${formatUsd(
+              projectMonthlyUsd(scopeNano, requestsPerDay)
+            )} / month.\n\n`;
+        } else {
+          tooltipMd += `💸 **Cost (${model})**: ${formatAiu(
+            nanoAiuToAiu(scopeNano)
+          )} ≈ ${formatUsd(nanoAiuToUsd(scopeNano))} per ${
+            node.scope === "conditional" ? "invocation" : "use"
+          }.\n\n`;
+        }
+      }
+      tooltipMd += `Warn threshold: ${warn.toLocaleString()} · Error threshold: ${error.toLocaleString()}`;
+      item.tooltip = new vscode.MarkdownString(tooltipMd);
       item.iconPath = iconForTokens(node.tokens, warn, error);
       item.contextValue = "tokoptCategory";
       return item;
@@ -339,6 +369,9 @@ export class TokenCostTreeProvider
 
     const myGen = ++this.generation;
     const binaryPath = this.resolveBinary();
+    const creditModel = vscode.workspace
+      .getConfiguration("tokopt")
+      .get<string>("creditModel", "none");
 
     // Run all folder audits in parallel. Per-folder errors don't fail
     // the whole tree — they show as a per-folder absence in
@@ -346,7 +379,12 @@ export class TokenCostTreeProvider
     const pendingFolders = new Map<string, FolderState>();
     const settled = await Promise.allSettled(
       folders.map(async (folder) => {
-        const outcome = await runTokoptAudit(binaryPath, folder.uri.fsPath, this.log);
+        const outcome = await runTokoptAudit(
+          binaryPath,
+          folder.uri.fsPath,
+          this.log,
+          creditModel
+        );
         return { folder, outcome, binaryPath };
       })
     );
@@ -475,6 +513,26 @@ export class TokenCostTreeProvider
       }
     }
     return out;
+  }
+
+  /**
+   * Sum the per-scope nano-AIU across all folder audit results. Returns
+   * null when no folder carried a credit block (i.e. `tokopt.creditModel`
+   * is unset), so the tree falls back to tokens-only display.
+   */
+  private scopeNanoAiu(scope: AuditFile["scope"]): number | null {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    let total = 0;
+    let sawCredit = false;
+    for (const folder of folders) {
+      const credit = this.folders.get(folder.uri.toString())?.result?.credit;
+      if (!credit) continue;
+      sawCredit = true;
+      if (scope === "always-on") total += credit.alwaysOnNanoAiu;
+      else if (scope === "conditional") total += credit.conditionalNanoAiu;
+      else total += credit.onDemandNanoAiu;
+    }
+    return sawCredit ? total : null;
   }
 
   private async setState(next: TreeUiState): Promise<void> {

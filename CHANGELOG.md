@@ -6,6 +6,37 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.7.0] — 2026-06-20
+
+### Added
+
+- **💰 Cost projection — see tokens as AI Credits and dollars** (new setting `tokopt.creditModel`). Until now the extension showed token _counts_; in the metered-billing era (GitHub Copilot AI Credits, `1 AIU = $0.01`) what actually matters is _cost_. Set `tokopt.creditModel` to one of the rate-card models (`gpt-5.5`, `claude-opus-4.7-1m-internal`, `gemini-3.1-pro-preview`, `mai-code-1-flash-internal`) and the extension projects every count into nano-AIU → AIU → USD using `tokopt --credit-model`:
+  - **CodeLens** gains an inline cost suffix, scope-aware:
+    - always-on → `▸ 630 tokens (always-on, paid every request)  ·  ≈ 0.197 AIU/req · ~$11.81/mo`
+    - conditional → `≈ 0.087 AIU/invocation`
+    - on-demand → `≈ 0.053 AIU/use`
+  - **Status bar** tooltip projects the always-on tax to a monthly bill: e.g. a 2,412-token tax ≈ **$45.23/month** at 200 requests/day — _paid before you write a single line of a prompt_.
+  - **Token Cost TreeView** category tooltips show per-scope cost.
+  - **Show breakdown** modal (click the CodeLens) adds a full cost-math section including the monthly always-on projection.
+  - New setting `tokopt.requestsPerDay` (default 200) controls the monthly projection assumption; it is stated explicitly wherever a monthly figure appears.
+  - Backward compatible: with `tokopt.creditModel` unset (default `none`) every surface renders exactly as in v0.6.6 — no `--credit-model` flag is even passed to the CLI.
+- **📊 Workspace Optimization Report** (new command `tokopt: Show Optimization Report`, also a toolbar button on the Token Cost view). Fuses `tokopt audit --credit-model` (where the tokens/cost are) with `tokopt detect` (what to trim and by how much) into a single markdown document opened in a new editor tab:
+  - **§1 Where your tokens go** — a cost-summary table (always-on / conditional / on-demand → tokens + AIU + USD), plus the headline always-on monthly projection.
+  - **§2 What to optimize** — every anti-pattern finding ranked by estimated tokens saved, with a total (on the bundled fixture: **~2,894 tokens** across 10 findings) and per-finding recommended actions.
+  - **§3 How to act** — points back to the Quick Fix / Problems-panel workflow.
+  - When no credit model is set, the report still renders (tokens-only) and tells you how to enable cost columns.
+
+### Internal / quality
+
+- New pure modules `src/credit.ts` (nano-AIU ↔ AIU ↔ USD math, scope-aware cost formatting) and `src/optimizationReport.ts` (markdown rendering). Both are `vscode`-free so they are unit-tested directly.
+- **First unit tests in the repo**: `npm test` builds `src/*.test.ts` with esbuild and runs them via Node's built-in `node:test` (zero new runtime dependencies). 21 tests cover the credit math, scope-aware formatting, and report rendering (cost columns, savings ranking, tokens-only fallback, monthly projection).
+- `runTokoptCount` and `runTokoptAudit` gained an optional `creditModel` parameter and parse the CLI's `nano_aiu` / `credit` blocks. The parameter defaults to off, so existing call sites are unchanged.
+
+### Compatibility
+
+- All new behaviour is opt-in via `tokopt.creditModel`. With the default (`none`), the CodeLens, status bar, and tree are byte-for-byte identical to v0.6.6.
+- Requires a `tokopt` binary that supports `--credit-model` for the cost features (the rest of the extension still works with older binaries; cost projection silently stays off if the CLI omits the `nano_aiu` / `credit` fields).
+
 ## [0.6.6] — 2026-06-15
 
 ### Fixed

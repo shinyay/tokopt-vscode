@@ -2,6 +2,7 @@ import * as fs from "node:fs";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { classifyCustomizationFile } from "./customizationFiles.js";
+import { formatAiu, formatUsd, projectMonthlyAiu, projectMonthlyUsd } from "./credit.js";
 import { runTokoptCount } from "./tokopt.js";
 
 /**
@@ -24,12 +25,18 @@ interface CountCacheEntry {
   size: number;
   binaryPath: string;
   tokens: number;
+  /** Credit model the cached nanoAiu was computed for; part of the key. */
+  creditModel: string;
+  /** Projected nano-AIU for this file (only when a credit model was set). */
+  nanoAiu?: number;
 }
 
 interface AggregateState {
   totalTokens: number;
   perFile: Array<{ absPath: string; relPath: string; tokens: number }>;
   errorCount: number;
+  /** Sum of per-file nano-AIU across always-on files (0 when no model). */
+  totalNanoAiu: number;
 }
 
 /**
@@ -53,6 +60,7 @@ export class TokoptStatusBarManager implements vscode.Disposable {
     totalTokens: 0,
     perFile: [],
     errorCount: 0,
+    totalNanoAiu: 0,
   };
   private currentFile: { path: string; tokens: number } | null = null;
   private refreshing = false;
@@ -324,29 +332,40 @@ export class TokoptStatusBarManager implements vscode.Disposable {
       return { kind: "skip" };
     }
     const cached = this.cache.get(filePath);
+    const creditModel = vscode.workspace
+      .getConfiguration("tokopt")
+      .get<string>("creditModel", "none");
     if (
       cached &&
       cached.mtimeMs === mtimeMs &&
       cached.size === size &&
-      cached.binaryPath === binaryPath
+      cached.binaryPath === binaryPath &&
+      cached.creditModel === creditModel
     ) {
       return { kind: "ok", tokens: cached.tokens };
     }
-    const outcome = await runTokoptCount(binaryPath, filePath, this.log);
+    const outcome = await runTokoptCount(
+      binaryPath,
+      filePath,
+      this.log,
+      creditModel
+    );
     if (outcome.kind === "binary-missing") {
       return { kind: "binary-missing" };
     }
     if (outcome.kind !== "ok") {
       return { kind: "skip" };
     }
-    // Cache write is safe: the entry is keyed by mtimeMs+size+binaryPath,
-    // so a stale-result write can never satisfy a future read with a
-    // different binaryPath or after a file mutation.
+    // Cache write is safe: the entry is keyed by mtimeMs+size+binaryPath+
+    // creditModel, so a stale-result write can never satisfy a future read
+    // with a different binaryPath/model or after a file mutation.
     this.cache.set(filePath, {
       mtimeMs,
       size,
       binaryPath,
       tokens: outcome.result.tokens,
+      creditModel,
+      nanoAiu: outcome.result.nanoAiu,
     });
     return { kind: "ok", tokens: outcome.result.tokens };
   }
@@ -359,10 +378,11 @@ export class TokoptStatusBarManager implements vscode.Disposable {
       return;
     }
     const binaryPath = config.get<string>("binaryPath", "tokopt") || "tokopt";
+    const creditModel = config.get<string>("creditModel", "none");
 
     const files = this.discoverAlwaysOnFiles();
     if (files.length === 0) {
-      this.state = { totalTokens: 0, perFile: [], errorCount: 0 };
+      this.state = { totalTokens: 0, perFile: [], errorCount: 0, totalNanoAiu: 0 };
       this.binaryMissing = false;
       this.item.hide();
       return;
@@ -375,6 +395,7 @@ export class TokoptStatusBarManager implements vscode.Disposable {
     const pendingCache = new Map<string, CountCacheEntry>();
     const perFile: Array<{ absPath: string; relPath: string; tokens: number }> = [];
     let totalTokens = 0;
+    let totalNanoAiu = 0;
     let errorCount = 0;
     let binaryMissing = false;
 
@@ -391,15 +412,23 @@ export class TokoptStatusBarManager implements vscode.Disposable {
       }
       const cached = this.cache.get(filePath);
       let tokens: number;
+      let nanoAiu: number | undefined;
       if (
         cached &&
         cached.mtimeMs === mtimeMs &&
         cached.size === size &&
-        cached.binaryPath === binaryPath
+        cached.binaryPath === binaryPath &&
+        cached.creditModel === creditModel
       ) {
         tokens = cached.tokens;
+        nanoAiu = cached.nanoAiu;
       } else {
-        const outcome = await runTokoptCount(binaryPath, filePath, this.log);
+        const outcome = await runTokoptCount(
+          binaryPath,
+          filePath,
+          this.log,
+          creditModel
+        );
         // Bail before mutating anything if a clear()/refresh() has
         // superseded us during the async call.
         if (this.generation !== myGen) {
@@ -414,9 +443,20 @@ export class TokoptStatusBarManager implements vscode.Disposable {
           continue;
         }
         tokens = outcome.result.tokens;
-        pendingCache.set(filePath, { mtimeMs, size, binaryPath, tokens });
+        nanoAiu = outcome.result.nanoAiu;
+        pendingCache.set(filePath, {
+          mtimeMs,
+          size,
+          binaryPath,
+          tokens,
+          creditModel,
+          nanoAiu,
+        });
       }
       totalTokens += tokens;
+      if (typeof nanoAiu === "number") {
+        totalNanoAiu += nanoAiu;
+      }
       perFile.push({
         absPath: filePath,
         relPath: this.relativePath(filePath),
@@ -438,7 +478,7 @@ export class TokoptStatusBarManager implements vscode.Disposable {
     for (const [k, v] of pendingCache) {
       this.cache.set(k, v);
     }
-    this.state = { totalTokens, perFile, errorCount };
+    this.state = { totalTokens, perFile, errorCount, totalNanoAiu };
     this.render(config);
   }
 
@@ -525,6 +565,26 @@ export class TokoptStatusBarManager implements vscode.Disposable {
       tooltip.appendMarkdown(
         `Paid on every Copilot request, multiplied by every turn of every conversation.\n\n`
       );
+      // Cost projection (Feature: credit projection). Rendered only when a
+      // credit model is configured and the CLI returned nano-AIU.
+      const config = vscode.workspace.getConfiguration("tokopt");
+      const creditModel = config.get<string>("creditModel", "none");
+      if (creditModel !== "none" && this.state.totalNanoAiu > 0) {
+        const requestsPerDay = config.get<number>("requestsPerDay", 200);
+        const monthlyAiu = projectMonthlyAiu(
+          this.state.totalNanoAiu,
+          requestsPerDay
+        );
+        const monthlyUsd = projectMonthlyUsd(
+          this.state.totalNanoAiu,
+          requestsPerDay
+        );
+        tooltip.appendMarkdown(
+          `💸 **Cost (${creditModel})**: ~${formatAiu(monthlyAiu)} ≈ ${formatUsd(
+            monthlyUsd
+          )} / month at ${requestsPerDay.toLocaleString()} requests/day.\n\n`
+        );
+      }
       tooltip.appendMarkdown(
         `Files counted: ${perFile.length}`
       );
