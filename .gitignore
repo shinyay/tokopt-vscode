@@ -16,5 +16,6 @@ tmp/
 # VS Code extension build
 node_modules/
 out/
+out-test/
 *.vsix
 .vscode-test/

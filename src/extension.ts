@@ -2,6 +2,14 @@ import * as vscode from "vscode";
 import { TokoptCodeLensProvider } from "./codeLens.js";
 import { CountResult } from "./tokopt.js";
 import { CustomizationKind, classifyCustomizationFile } from "./customizationFiles.js";
+import {
+  formatAiu,
+  formatUsd,
+  nanoAiuToAiu,
+  nanoAiuToUsd,
+  projectMonthlyAiu,
+  projectMonthlyUsd,
+} from "./credit.js";
 import { TokoptDiagnosticManager } from "./diagnostics.js";
 import { TokoptStatusBarManager } from "./statusBar.js";
 import {
@@ -10,6 +18,9 @@ import {
   TokenCostNode,
 } from "./tokenCost.js";
 import { runTokoptDetect } from "./detect.js";
+import { runTokoptAudit } from "./audit.js";
+import { renderOptimizationReport } from "./optimizationReport.js";
+import { TokoptDashboard } from "./dashboard.js";
 import { resetWarnings } from "./warnings.js";
 import {
   SLIM_FIXABLE,
@@ -122,6 +133,9 @@ export function activate(context: vscode.ExtensionContext): void {
     showCollapseAll: true,
   });
   context.subscriptions.push(tokenCostView);
+
+  const dashboard = new TokoptDashboard(log, resolveBinary);
+  context.subscriptions.push(dashboard);
   context.subscriptions.push(
     tokenCostView.onDidChangeVisibility((e) =>
       tokenCost.onVisibilityChange(e.visible)
@@ -265,6 +279,7 @@ export function activate(context: vscode.ExtensionContext): void {
       // creates a new customization file.
       if (classifyCustomizationFile(doc.uri.fsPath)) {
         tokenCost.scheduleRefresh();
+        void dashboard.refreshIfOpen();
       }
     })
   );
@@ -294,6 +309,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void statusBar.refresh();
       void statusBar.updateCurrentFile();
       tokenCost.clearCache();
+      void dashboard.refreshIfOpen();
     })
   );
 
@@ -313,7 +329,7 @@ export function activate(context: vscode.ExtensionContext): void {
       (uri: vscode.Uri, count: CountResult, kind: CustomizationKind) => {
         const filename = uri.fsPath.split(/[\\/]/).pop() ?? uri.fsPath;
         const bytesPerToken = count.bytes / Math.max(count.tokens, 1);
-        const detail = [
+        const lines = [
           `File: ${filename}`,
           `Tokens: ${count.tokens.toLocaleString()} (${kind})`,
           `Bytes: ${count.bytes.toLocaleString()} (${bytesPerToken.toFixed(2)} bytes/token, encoding ${count.encoding})`,
@@ -324,11 +340,44 @@ export function activate(context: vscode.ExtensionContext): void {
             : kind === "conditional"
               ? "  • Only paid when the agent is explicitly invoked."
               : "  • Only paid when the skill is triggered or the slash command is run.",
+        ];
+
+        // Cost projection section (Feature: credit projection). Only shown
+        // when a credit model is configured and the CLI returned nano-AIU.
+        if (count.nanoAiu && count.nanoAiu > 0) {
+          const config = vscode.workspace.getConfiguration("tokopt");
+          const requestsPerDay = config.get<number>("requestsPerDay", 200);
+          const aiu = nanoAiuToAiu(count.nanoAiu);
+          const usd = nanoAiuToUsd(count.nanoAiu);
+          lines.push(
+            ``,
+            `Cost projection (model: ${count.creditModel ?? "?"}):`,
+            `  • ${formatAiu(aiu)} ≈ ${formatUsd(usd)} per ${
+              kind === "always-on"
+                ? "request"
+                : kind === "conditional"
+                  ? "invocation"
+                  : "use"
+            }`
+          );
+          if (kind === "always-on") {
+            const monthlyAiu = projectMonthlyAiu(count.nanoAiu, requestsPerDay);
+            const monthlyUsd = projectMonthlyUsd(count.nanoAiu, requestsPerDay);
+            lines.push(
+              `  • At ${requestsPerDay.toLocaleString()} requests/day → ${formatAiu(
+                monthlyAiu
+              )} ≈ ${formatUsd(monthlyUsd)} per month`,
+              `    (always-on tax is paid on every request — slimming this file compounds)`
+            );
+          }
+        }
+
+        lines.push(
           ``,
           `Run \`tokopt anatomy "${uri.fsPath}"\` for a per-segment breakdown (auto-classifies the segment),`,
-          `or \`tokopt detect "${uri.fsPath}"\` to surface structural anti-patterns.`,
-        ].join("\n");
-        vscode.window.showInformationMessage(detail, { modal: true });
+          `or \`tokopt detect "${uri.fsPath}"\` to surface structural anti-patterns.`
+        );
+        vscode.window.showInformationMessage(lines.join("\n"), { modal: true });
       }
     )
   );
@@ -355,6 +404,83 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("tokopt.showStatusBarBreakdown", () => {
       statusBar.showBreakdown();
+    })
+  );
+
+  // ---- Workspace Optimization Report ----------------------------------
+  //
+  // Composes `tokopt audit --credit-model X` (cost) with `tokopt detect`
+  // (savings) into a single markdown document opened in a new editor tab.
+  // This is the "executive dashboard" surface: where the tokens go, what
+  // to trim, and how much it saves — in tokens AND AI Credits / USD.
+  context.subscriptions.push(
+    vscode.commands.registerCommand(
+      "tokopt.showOptimizationReport",
+      async () => {
+        const folder = vscode.workspace.workspaceFolders?.[0];
+        if (!folder) {
+          void vscode.window.showWarningMessage(
+            "tokopt: open a folder to generate an optimization report."
+          );
+          return;
+        }
+        const config = vscode.workspace.getConfiguration("tokopt");
+        const binaryPath =
+          config.get<string>("binaryPath", "tokopt") || "tokopt";
+        const creditModel = config.get<string>("creditModel", "none");
+        const requestsPerDay = config.get<number>("requestsPerDay", 200);
+
+        await vscode.window.withProgress(
+          {
+            location: vscode.ProgressLocation.Notification,
+            title: "tokopt: building optimization report…",
+          },
+          async () => {
+            const root = folder.uri.fsPath;
+            const [auditOutcome, detectOutcome] = await Promise.all([
+              runTokoptAudit(binaryPath, root, log, creditModel),
+              runTokoptDetect(binaryPath, root, log),
+            ]);
+
+            if (auditOutcome.kind !== "ok") {
+              void vscode.window.showErrorMessage(
+                `tokopt: could not run audit (${auditOutcome.kind}). See the tokopt output channel.`
+              );
+              return;
+            }
+            const findings =
+              detectOutcome.kind === "ok" ? detectOutcome.findings : [];
+
+            const markdown = renderOptimizationReport(
+              auditOutcome.result,
+              findings,
+              {
+                requestsPerDay,
+                creditModel:
+                  creditModel === "none" ? undefined : creditModel,
+                generatedAt: new Date().toISOString(),
+              }
+            );
+
+            const doc = await vscode.workspace.openTextDocument({
+              language: "markdown",
+              content: markdown,
+            });
+            await vscode.window.showTextDocument(doc, { preview: false });
+          }
+        );
+      }
+    )
+  );
+
+  // ---- Graphical Token Optimization Dashboard (Webview) ----------------
+  //
+  // The visual counterpart to the markdown report: a webview with inline
+  // SVG charts (scope donut, per-file + savings bar charts), metric cards
+  // and severity-coded finding cards. Reuses the same audit + detect data.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tokopt.showDashboard", () => {
+      void dashboard.show();
     })
   );
 

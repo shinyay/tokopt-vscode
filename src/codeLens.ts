@@ -1,4 +1,5 @@
 import * as vscode from "vscode";
+import { formatCostSuffix } from "./credit.js";
 import { classifyCustomizationFile } from "./customizationFiles.js";
 import { CountResult, runTokoptCount } from "./tokopt.js";
 
@@ -6,6 +7,8 @@ interface CacheEntry {
   documentVersion: number;
   tokens: number;
   bytes: number;
+  nanoAiu?: number;
+  creditModel?: string;
 }
 
 /**
@@ -72,7 +75,23 @@ export class TokoptCodeLensProvider implements vscode.CodeLensProvider {
     }
 
     const range = new vscode.Range(0, 0, 0, 0);
-    const headline = `▸ ${count.tokens.toLocaleString()} tokens (${klass.label}, ${klass.description})`;
+    let headline = `▸ ${count.tokens.toLocaleString()} tokens (${klass.label}, ${klass.description})`;
+
+    // Cost projection suffix (Feature: credit projection). Only rendered
+    // when a credit model is configured AND the CLI returned a nano-AIU
+    // figure — otherwise the headline is byte-for-byte the legacy form.
+    if (count.nanoAiu && count.nanoAiu > 0) {
+      const requestsPerDay = config.get<number>("requestsPerDay", 200);
+      const suffix = formatCostSuffix({
+        nanoAiu: count.nanoAiu,
+        kind: klass.kind,
+        requestsPerDay,
+      });
+      if (suffix) {
+        headline += `  ·  ${suffix}`;
+      }
+    }
+
     const headlineLens = new vscode.CodeLens(range, {
       title: headline,
       command: "tokopt.showBreakdown",
@@ -86,14 +105,21 @@ export class TokoptCodeLensProvider implements vscode.CodeLensProvider {
     document: vscode.TextDocument,
     config: vscode.WorkspaceConfiguration
   ): Promise<CountResult | null> {
+    const creditModel = config.get<string>("creditModel", "none");
     const key = document.uri.toString();
     const cached = this.cache.get(key);
-    if (cached && cached.documentVersion === document.version) {
+    if (
+      cached &&
+      cached.documentVersion === document.version &&
+      cached.creditModel === creditModel
+    ) {
       return {
         path: document.uri.fsPath,
         encoding: "o200k_base",
         tokens: cached.tokens,
         bytes: cached.bytes,
+        nanoAiu: cached.nanoAiu,
+        creditModel: cached.creditModel,
       };
     }
 
@@ -101,7 +127,8 @@ export class TokoptCodeLensProvider implements vscode.CodeLensProvider {
     const outcome = await runTokoptCount(
       binaryPath,
       document.uri.fsPath,
-      this.log
+      this.log,
+      creditModel
     );
 
     if (outcome.kind !== "ok") {
@@ -112,6 +139,8 @@ export class TokoptCodeLensProvider implements vscode.CodeLensProvider {
       documentVersion: document.version,
       tokens: outcome.result.tokens,
       bytes: outcome.result.bytes,
+      nanoAiu: outcome.result.nanoAiu,
+      creditModel,
     });
     return outcome.result;
   }

@@ -2,7 +2,7 @@
   "name": "tokopt-vscode",
   "displayName": "tokopt — Token Optimization for Copilot",
   "description": "Token-cost CodeLens + anti-pattern Diagnostics + Quick Fix + Status bar (always-on tax) + Token Cost TreeView for Copilot customization files (instructions, agents, skills).",
-  "version": "0.6.6",
+  "version": "0.7.0",
   "publisher": "shinyay",
   "license": "MIT",
   "repository": {
@@ -74,6 +74,31 @@
           "default": "tokopt",
           "description": "Path to the tokopt binary. Use 'tokopt' to resolve from PATH, or an absolute path."
         },
+        "tokopt.creditModel": {
+          "type": "string",
+          "default": "none",
+          "enum": [
+            "none",
+            "gpt-5.5",
+            "claude-opus-4.7-1m-internal",
+            "gemini-3.1-pro-preview",
+            "mai-code-1-flash-internal"
+          ],
+          "enumDescriptions": [
+            "Disabled — show token counts only (no cost projection).",
+            "GPT-5.5 rate card.",
+            "Claude Opus 4.7 (1M context) rate card.",
+            "Gemini 3.1 Pro rate card.",
+            "MAI-Code-1-Flash rate card."
+          ],
+          "markdownDescription": "Project token counts into **AI Credits (AIU)** and **USD** using this model's empirical rate card (`tokopt --credit-model`). When set, the CodeLens, status bar, and Optimization Report show estimated cost per request / month. `1 AIU = $0.01`."
+        },
+        "tokopt.requestsPerDay": {
+          "type": "number",
+          "default": 200,
+          "minimum": 0,
+          "markdownDescription": "Assumed Copilot requests per day, used to project the **monthly** cost of the always-on tax in the CodeLens, status bar, and Optimization Report. Only affects display when `#tokopt.creditModel#` is set."
+        },
         "tokopt.statusBar.enabled": {
           "type": "boolean",
           "default": true,
@@ -142,6 +167,16 @@
       {
         "command": "tokopt.showStatusBarBreakdown",
         "title": "tokopt: Show always-on tax breakdown"
+      },
+      {
+        "command": "tokopt.showOptimizationReport",
+        "title": "tokopt: Show Optimization Report",
+        "icon": "$(graph)"
+      },
+      {
+        "command": "tokopt.showDashboard",
+        "title": "tokopt: Show Optimization Dashboard",
+        "icon": "$(graph-line)"
       },
       {
         "command": "tokopt.tree.refresh",
@@ -223,6 +258,14 @@
           "when": "config.tokopt.statusBar.enabled"
         },
         {
+          "command": "tokopt.showOptimizationReport",
+          "when": "workspaceFolderCount != 0"
+        },
+        {
+          "command": "tokopt.showDashboard",
+          "when": "workspaceFolderCount != 0"
+        },
+        {
           "command": "tokopt.tree.openFile",
           "when": "false"
         },
@@ -237,9 +280,19 @@
       ],
       "view/title": [
         {
+          "command": "tokopt.showDashboard",
+          "when": "view == tokoptTokenCost",
+          "group": "navigation@0"
+        },
+        {
+          "command": "tokopt.showOptimizationReport",
+          "when": "view == tokoptTokenCost",
+          "group": "navigation@1"
+        },
+        {
           "command": "tokopt.tree.refresh",
           "when": "view == tokoptTokenCost",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [
@@ -266,7 +319,9 @@
     "watch": "node esbuild.mjs --watch",
     "vscode:prepublish": "npm run build",
     "package": "vsce package --no-dependencies",
-    "typecheck": "tsc --noEmit"
+    "typecheck": "tsc --noEmit",
+    "build:test": "node esbuild.test.mjs",
+    "test": "npm run build:test && node --test out-test/*.test.js"
   },
   "devDependencies": {
     "@types/node": "^20.11.0",

@@ -1,6 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
+import { creditModelArgs } from "./credit.js";
 import { SUPPORTED_FORMAT_VERSION } from "./tokopt.js";
 import { warnBinaryMissing, warnVersionMismatch } from "./warnings.js";
 
@@ -24,6 +25,20 @@ export interface AuditFile {
   note?: string;
 }
 
+/**
+ * Aggregate cost projection from `tokopt audit --credit-model <model>`.
+ * Present only when a credit model was passed and the CLI returned a
+ * `credit` block. All figures are in nano-AIU (1 AIU = 1e9 nano-AIU).
+ */
+export interface AuditCredit {
+  model: string;
+  nanoAiuPerInputToken: number;
+  alwaysOnNanoAiu: number;
+  conditionalNanoAiu: number;
+  onDemandNanoAiu: number;
+  totalNanoAiu: number;
+}
+
 export interface AuditResult {
   root: string;
   encoding: string;
@@ -31,6 +46,8 @@ export interface AuditResult {
   alwaysOnTotal: number;
   conditionalTotal: number;
   onDemandTotal: number;
+  /** Cost projection — present only when an audit credit model was set. */
+  credit?: AuditCredit;
   /** Raw stdout, preserved so the "Show in audit panel" command can dump
    * the exact JSON payload that produced the current tree state. */
   raw: string;
@@ -44,6 +61,36 @@ export type AuditOutcome =
 
 function isErrnoException(e: unknown): e is NodeJS.ErrnoException {
   return typeof e === "object" && e !== null && "code" in e;
+}
+
+/**
+ * Parse the optional `credit` block from an audit payload. Returns
+ * undefined if absent or malformed (the feature simply stays off rather
+ * than corrupting the tree).
+ */
+function parseAuditCredit(raw: unknown): AuditCredit | undefined {
+  if (!raw || typeof raw !== "object") {
+    return undefined;
+  }
+  const c = raw as Record<string, unknown>;
+  if (
+    typeof c.model !== "string" ||
+    typeof c.nano_aiu_per_input_token !== "number" ||
+    typeof c.always_on_nano_aiu !== "number" ||
+    typeof c.conditional_nano_aiu !== "number" ||
+    typeof c.on_demand_nano_aiu !== "number" ||
+    typeof c.total_nano_aiu !== "number"
+  ) {
+    return undefined;
+  }
+  return {
+    model: c.model,
+    nanoAiuPerInputToken: c.nano_aiu_per_input_token,
+    alwaysOnNanoAiu: c.always_on_nano_aiu,
+    conditionalNanoAiu: c.conditional_nano_aiu,
+    onDemandNanoAiu: c.on_demand_nano_aiu,
+    totalNanoAiu: c.total_nano_aiu,
+  };
 }
 
 /**
@@ -61,12 +108,13 @@ function isErrnoException(e: unknown): e is NodeJS.ErrnoException {
 export async function runTokoptAudit(
   binaryPath: string,
   workspaceRoot: string,
-  log: vscode.OutputChannel
+  log: vscode.OutputChannel,
+  creditModel?: string
 ): Promise<AuditOutcome> {
   try {
     const { stdout } = await execFileAsync(
       binaryPath,
-      ["audit", "--format=json", workspaceRoot],
+      ["audit", "--format=json", ...creditModelArgs(creditModel), workspaceRoot],
       // Audit walks the workspace; allow more buffer/time than `count`
       // but still cap so a runaway scan can't hang the extension host.
       { timeout: 30_000, maxBuffer: 8 * 1024 * 1024 }
@@ -148,6 +196,8 @@ export async function runTokoptAudit(
     const onDemandTotal =
       typeof payload.on_demand_total === "number" ? payload.on_demand_total : 0;
 
+    const credit = parseAuditCredit(payload.credit);
+
     return {
       kind: "ok",
       result: {
@@ -157,6 +207,7 @@ export async function runTokoptAudit(
         alwaysOnTotal,
         conditionalTotal,
         onDemandTotal,
+        credit,
         raw: stdout,
       },
     };
