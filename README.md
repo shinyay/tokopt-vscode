@@ -11,7 +11,7 @@ Two complementary install surfaces — pick either, or both:
 
 | Surface | What you get | Best for |
 |---|---|---|
-| **`.vsix` extension** (v0.2.0+) | Inline CodeLens (per-file token cost **+ AI Credit / USD cost**) + Diagnostics (anti-pattern findings in Problems panel) + Quick Fix (Cmd+. apply / preview / suppress) + Status bar (always-on tax **+ monthly cost**) + Token Cost TreeView + **Workspace Optimization Report** on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md`, `AGENTS.md` | Editing customization files — see cost, anti-patterns, and one-click fixes ambiently |
+| **`.vsix` extension** (v0.2.0+) | Inline CodeLens (per-file token cost **+ AI Credit / USD cost**) + Diagnostics (anti-pattern findings in Problems panel) + Quick Fix (Cmd+. apply / preview / suppress) + Status bar (always-on tax **+ monthly cost**) + Token Cost TreeView + **Workspace Optimization Report** + **graphical Optimization Dashboard (Webview, SVG charts)** on `copilot-instructions.md`, `*.agent.md`, `SKILL.md`, `*.prompt.md`, `*.chatmode.md`, `AGENTS.md` | Editing customization files — see cost, anti-patterns, and one-click fixes ambiently |
 | **`scripts/install-*.sh`** (v0.1.x) | `.github/agents/`, `.github/skills/`, `.github/prompts/` assets for Copilot Chat | Running `@token-doctor` / `/token-audit` in Copilot Chat |
 
 Both rely on the same [`tokopt`](https://github.com/shinyay/tokopt) Go CLI for measurement.
@@ -360,6 +360,33 @@ document opened in a new editor tab:
 
 With no credit model set, the report still renders (tokens-only) and
 tells you how to switch the cost columns on.
+
+---
+
+## 📈 Graphical Optimization Dashboard (`v0.7.0`)
+
+Run **`tokopt: Show Optimization Dashboard`** (command palette) or click
+the 📈 button on the Token Cost view toolbar to open a **Webview panel**
+that visualizes the whole workspace at a glance — the graphical
+counterpart to the markdown report:
+
+- **Metric cards**: always-on tax (tokens + monthly $), total
+  customization cost, potential savings, anti-pattern count.
+- **Scope donut chart**: how your tokens split across always-on /
+  conditional / on-demand, with a per-scope cost legend.
+- **"Heaviest files" bar chart**: the biggest files, coloured by scope —
+  click any bar to open the file.
+- **"Savings opportunities" bar chart** + **severity-coded finding
+  cards**: what to trim first, ranked by estimated tokens saved, each
+  with a one-line fix. Click a finding to jump to the file.
+- **Interactive toolbar**: switch the cost model or requests/day right
+  in the panel (it updates the workspace setting and re-renders), or hit
+  Refresh. The panel also refreshes when you save a customization file.
+
+The charts are **dependency-free inline SVG** (no external chart library,
+CSP-safe) and use VS Code's `--vscode-charts-*` theme variables, so the
+dashboard matches your active light/dark theme. With no `tokopt.creditModel`
+set it renders tokens-only with a hint to enable cost.
 
 ---
 

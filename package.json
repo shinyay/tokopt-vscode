@@ -174,6 +174,11 @@
         "icon": "$(graph)"
       },
       {
+        "command": "tokopt.showDashboard",
+        "title": "tokopt: Show Optimization Dashboard",
+        "icon": "$(graph-line)"
+      },
+      {
         "command": "tokopt.tree.refresh",
         "title": "tokopt: Refresh Token Cost",
         "icon": "$(refresh)"
@@ -257,6 +262,10 @@
           "when": "workspaceFolderCount != 0"
         },
         {
+          "command": "tokopt.showDashboard",
+          "when": "workspaceFolderCount != 0"
+        },
+        {
           "command": "tokopt.tree.openFile",
           "when": "false"
         },
@@ -271,14 +280,19 @@
       ],
       "view/title": [
         {
-          "command": "tokopt.showOptimizationReport",
+          "command": "tokopt.showDashboard",
           "when": "view == tokoptTokenCost",
           "group": "navigation@0"
         },
         {
+          "command": "tokopt.showOptimizationReport",
+          "when": "view == tokoptTokenCost",
+          "group": "navigation@1"
+        },
+        {
           "command": "tokopt.tree.refresh",
           "when": "view == tokoptTokenCost",
-          "group": "navigation"
+          "group": "navigation@2"
         }
       ],
       "view/item/context": [

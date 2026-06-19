@@ -20,6 +20,7 @@ import {
 import { runTokoptDetect } from "./detect.js";
 import { runTokoptAudit } from "./audit.js";
 import { renderOptimizationReport } from "./optimizationReport.js";
+import { TokoptDashboard } from "./dashboard.js";
 import { resetWarnings } from "./warnings.js";
 import {
   SLIM_FIXABLE,
@@ -132,6 +133,9 @@ export function activate(context: vscode.ExtensionContext): void {
     showCollapseAll: true,
   });
   context.subscriptions.push(tokenCostView);
+
+  const dashboard = new TokoptDashboard(log, resolveBinary);
+  context.subscriptions.push(dashboard);
   context.subscriptions.push(
     tokenCostView.onDidChangeVisibility((e) =>
       tokenCost.onVisibilityChange(e.visible)
@@ -275,6 +279,7 @@ export function activate(context: vscode.ExtensionContext): void {
       // creates a new customization file.
       if (classifyCustomizationFile(doc.uri.fsPath)) {
         tokenCost.scheduleRefresh();
+        void dashboard.refreshIfOpen();
       }
     })
   );
@@ -304,6 +309,7 @@ export function activate(context: vscode.ExtensionContext): void {
       void statusBar.refresh();
       void statusBar.updateCurrentFile();
       tokenCost.clearCache();
+      void dashboard.refreshIfOpen();
     })
   );
 
@@ -465,6 +471,17 @@ export function activate(context: vscode.ExtensionContext): void {
         );
       }
     )
+  );
+
+  // ---- Graphical Token Optimization Dashboard (Webview) ----------------
+  //
+  // The visual counterpart to the markdown report: a webview with inline
+  // SVG charts (scope donut, per-file + savings bar charts), metric cards
+  // and severity-coded finding cards. Reuses the same audit + detect data.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tokopt.showDashboard", () => {
+      void dashboard.show();
+    })
   );
 
   // ---- Token-cost TreeView commands -----------------------------------

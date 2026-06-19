@@ -10,6 +10,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Added
 
+- **📈 Graphical Token Optimization Dashboard** (new command `tokopt: Show Optimization Dashboard`, also a toolbar button on the Token Cost view). A Webview panel that visualizes the workspace's customization cost with **dependency-free inline SVG charts** (no external chart library; CSP-safe; themed via VS Code's `--vscode-charts-*` variables so it matches light/dark):
+  - **Metric cards** — always-on tax (tokens + monthly USD), total customization, potential savings, anti-pattern count (severity-coloured).
+  - **Scope donut chart** — always-on / conditional / on-demand token split with a per-scope cost legend.
+  - **"Heaviest files" bar chart** — top files by tokens, coloured by scope; click a bar to open the file.
+  - **"Savings opportunities" bar chart** + **severity-coded finding cards** with one-line recommendations; click a finding to open the offending file.
+  - **Interactive toolbar** — change the cost model or requests/day right in the panel (writes the workspace setting and re-renders), or hit Refresh. The panel also re-renders automatically when a customization file is saved.
+  - Renders tokens-only (no cost columns) when `tokopt.creditModel` is unset, with an inline hint to enable it.
 - **💰 Cost projection — see tokens as AI Credits and dollars** (new setting `tokopt.creditModel`). Until now the extension showed token _counts_; in the metered-billing era (GitHub Copilot AI Credits, `1 AIU = $0.01`) what actually matters is _cost_. Set `tokopt.creditModel` to one of the rate-card models (`gpt-5.5`, `claude-opus-4.7-1m-internal`, `gemini-3.1-pro-preview`, `mai-code-1-flash-internal`) and the extension projects every count into nano-AIU → AIU → USD using `tokopt --credit-model`:
   - **CodeLens** gains an inline cost suffix, scope-aware:
     - always-on → `▸ 630 tokens (always-on, paid every request)  ·  ≈ 0.197 AIU/req · ~$11.81/mo`
@@ -28,8 +35,8 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ### Internal / quality
 
-- New pure modules `src/credit.ts` (nano-AIU ↔ AIU ↔ USD math, scope-aware cost formatting) and `src/optimizationReport.ts` (markdown rendering). Both are `vscode`-free so they are unit-tested directly.
-- **First unit tests in the repo**: `npm test` builds `src/*.test.ts` with esbuild and runs them via Node's built-in `node:test` (zero new runtime dependencies). 21 tests cover the credit math, scope-aware formatting, and report rendering (cost columns, savings ranking, tokens-only fallback, monthly projection).
+- New pure modules `src/credit.ts` (nano-AIU ↔ AIU ↔ USD math, scope-aware cost formatting), `src/optimizationReport.ts` (markdown rendering), and `src/dashboardHtml.ts` (dashboard data-shaping + inline-SVG chart rendering). All three are `vscode`-free so they are unit-tested directly.
+- **First unit tests in the repo**: `npm test` builds `src/*.test.ts` with esbuild and runs them via Node's built-in `node:test` (zero new runtime dependencies). 32 tests cover the credit math, scope-aware formatting, markdown report rendering, and the dashboard's chart geometry (donut dash-arrays, bar widths), HTML/CSP structure and escaping.
 - `runTokoptCount` and `runTokoptAudit` gained an optional `creditModel` parameter and parse the CLI's `nano_aiu` / `credit` blocks. The parameter defaults to off, so existing call sites are unchanged.
 
 ### Compatibility
