@@ -6,6 +6,21 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.8.0] — 2026-06-20
+
+### Added / Changed (dashboard & status bar refinements)
+
+Polish pass after the v0.7.0 manual verification (which passed 26/26 clean):
+
+- **Status bar shows the monthly cost inline** — the always-on tax item now reads e.g. `2,412 tokens always-on · ~$45/mo` (rounded) when `tokopt.creditModel` is set, so the cost is visible without hovering. The tooltip still carries the precise AIU + USD breakdown. (R2)
+- **Dashboard → "📄 Markdown report" button** — the graphical dashboard gained a toolbar button that opens the markdown Optimization Report, bridging the visual and copy-pasteable views. (R3)
+- **Dashboard "Heaviest files" handles large workspaces** — the per-file bar chart now lists up to 40 files (was 14) inside a scrollable panel, and the section header shows the file count, so big repos no longer silently hide files. (R5)
+- **Dashboard accessibility** — the scope donut now carries an `aria-label` summarizing each segment's tokens and percentage, and every bar-chart row has an `aria-label` (label + value) with the list marked `role="list"`. Screen readers announce the data instead of an opaque image. (R1)
+
+### Internal / quality
+
+- 5 new unit tests (donut/bar `aria-label`, report-button wiring, 40-file cap, scrollable list + count) → **37 total**, all green via `node:test`.
+
 ## [0.7.0] — 2026-06-20
 
 ### Added

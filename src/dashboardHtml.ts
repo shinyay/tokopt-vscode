@@ -115,7 +115,7 @@ export function buildDashboardData(
     topFileLimit?: number;
   }
 ): DashboardData {
-  const limit = opts.topFileLimit ?? 14;
+  const limit = opts.topFileLimit ?? 40;
   const credit = audit.credit;
 
   const scopeTokens: Record<Scope, number> = {
@@ -246,9 +246,21 @@ export function donutSvg(
         : "")
     : "";
 
+  // Accessibility: a text summary of every segment so screen readers
+  // announce the data instead of an opaque "image".
+  const ariaParts = segments
+    .filter((s) => s.value > 0)
+    .map((s) => {
+      const pct = total > 0 ? Math.round((s.value / total) * 100) : 0;
+      return `${s.label} ${s.value.toLocaleString()} (${pct}%)`;
+    });
+  const aria = ariaParts.length
+    ? ` aria-label="Token split by scope: ${escapeHtml(ariaParts.join(", "))}"`
+    : ` aria-label="No tokens"`;
+
   return (
     `<svg viewBox="0 0 ${size} ${size}" width="${size}" height="${size}" ` +
-    `role="img" class="donut">${arcs.join("")}${center}</svg>`
+    `role="img"${aria} class="donut">${arcs.join("")}${center}</svg>`
   );
 }
 
@@ -275,9 +287,14 @@ export function hbarSvg(rows: BarRow[]): string {
     .map((r) => {
       const pct = Math.max(0, (r.value / max) * 100);
       const clickable = r.path ? " clickable" : "";
+      // Accessibility: every row announces its label + value, and
+      // clickable rows are keyboard-focusable buttons.
+      const aria = ` aria-label="${escapeHtml(
+        `${r.label}${r.sublabel ? " " + r.sublabel : ""}: ${r.valueLabel} tokens`
+      )}"`;
       const dataAttr = r.path
-        ? ` data-path="${escapeHtml(r.path)}" tabindex="0" role="button"`
-        : "";
+        ? ` data-path="${escapeHtml(r.path)}" tabindex="0" role="button"${aria}`
+        : ` role="listitem"${aria}`;
       const sub = r.sublabel
         ? `<span class="bar-sub">${escapeHtml(r.sublabel)}</span>`
         : "";
@@ -296,7 +313,7 @@ export function hbarSvg(rows: BarRow[]): string {
       );
     })
     .join("");
-  return `<div class="bars">${items}</div>`;
+  return `<div class="bars" role="list">${items}</div>`;
 }
 
 function metricCard(opts: {
@@ -552,6 +569,7 @@ export function renderDashboardHtml(
   .legend-label { font-weight: 600; min-width: 90px; }
   .legend-val { color: var(--vscode-descriptionForeground); }
   .bars { display: flex; flex-direction: column; gap: 5px; }
+  .scroll-bars { max-height: 420px; overflow-y: auto; padding-right: 4px; }
   .bar-row { display: grid; grid-template-columns: minmax(140px, 240px) 1fr 70px; gap: 10px; align-items: center; padding: 2px 4px; border-radius: 4px; }
   .bar-row.clickable { cursor: pointer; }
   .bar-row.clickable:hover { background: var(--vscode-list-hoverBackground); }
@@ -587,6 +605,7 @@ export function renderDashboardHtml(
     <label for="rpd">Requests/day</label>
     <input id="rpd" type="number" min="0" value="${data.requestsPerDay}" />
     <button id="refresh">↻ Refresh</button>
+    <button id="open-report">📄 Markdown report</button>
     <span class="subtle">${modelNote}</span>
   </div>
 
@@ -600,8 +619,8 @@ export function renderDashboardHtml(
 
   <div class="two-col">
     <div>
-      <h2>Heaviest files</h2>
-      ${fileBars}
+      <h2>Heaviest files <span class="subtle">(${data.topFiles.length})</span></h2>
+      <div class="scroll-bars">${fileBars}</div>
     </div>
     <div>
       <h2>Savings opportunities</h2>
@@ -635,6 +654,7 @@ export function renderDashboardHtml(
       });
     });
     document.getElementById("refresh").addEventListener("click", () => vscode.postMessage({ type: "refresh" }));
+    document.getElementById("open-report").addEventListener("click", () => vscode.postMessage({ type: "openReport" }));
     document.getElementById("model").addEventListener("change", (e) =>
       vscode.postMessage({ type: "setModel", model: e.target.value }));
     document.getElementById("rpd").addEventListener("change", (e) =>

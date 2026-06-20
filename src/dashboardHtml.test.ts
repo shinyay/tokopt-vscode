@@ -148,3 +148,45 @@ test("renderDashboardHtml: no credit model → tokens-only, enable hint", () => 
   assert.match(html, /Set a cost model/);
   assert.match(html, /No anti-patterns detected/);
 });
+
+// ---- R1: accessibility ----
+test("donutSvg: carries an aria-label summarizing segments (a11y)", () => {
+  const svg = donutSvg([
+    { label: "Always-on", value: 30, colorVar: "--c1" },
+    { label: "On-demand", value: 70, colorVar: "--c2" },
+  ]);
+  assert.match(svg, /aria-label="Token split by scope: Always-on 30 \(30%\), On-demand 70 \(70%\)"/);
+});
+
+test("hbarSvg: rows carry aria-label and the list has role=list (a11y)", () => {
+  const html = hbarSvg([
+    { label: "AGENTS.md", sublabel: "Always-on", value: 100, valueLabel: "100", colorVar: "--c", path: "AGENTS.md" },
+  ]);
+  assert.match(html, /role="list"/);
+  assert.match(html, /aria-label="AGENTS\.md Always-on: 100 tokens"/);
+});
+
+// ---- R3: markdown report button ----
+test("renderDashboardHtml: has an Open markdown report button wired to openReport", () => {
+  const data = buildDashboardData(audit, findings, { creditModel: "gpt-5.5", requestsPerDay: 200, generatedAt: "t" });
+  const html = renderDashboardHtml(data, { cspSource: "x", nonce: "N" });
+  assert.match(html, /id="open-report"/);
+  assert.match(html, /type: "openReport"/);
+});
+
+// ---- R5: heaviest-files scroll + count + higher default cap ----
+test("buildDashboardData: default cap is 40 (was 14)", () => {
+  // synthesize 50 files
+  const many = { ...audit, files: Array.from({ length: 50 }, (_, i) => ({
+    path: `f${i}.md`, category: "x", scope: "on-demand" as const, tokens: 50 - i, bytes: 1,
+  })) };
+  const d = buildDashboardData(many, [], { requestsPerDay: 200, generatedAt: "t" });
+  assert.equal(d.topFiles.length, 40);
+});
+
+test("renderDashboardHtml: heaviest-files list is scrollable + shows count", () => {
+  const data = buildDashboardData(audit, findings, { requestsPerDay: 200, generatedAt: "t" });
+  const html = renderDashboardHtml(data, { cspSource: "x", nonce: "N" });
+  assert.match(html, /class="scroll-bars"/);
+  assert.match(html, /Heaviest files <span class="subtle">\(3\)<\/span>/);
+});
