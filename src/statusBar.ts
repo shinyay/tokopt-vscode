@@ -521,6 +521,18 @@ export class TokoptStatusBarManager implements vscode.Disposable {
     } else {
       text = `$(file-text) ${totalTokens.toLocaleString()} tokens always-on${errorMarker}`;
     }
+    // R2: surface the monthly cost compactly in the bar text itself (not
+    // just the tooltip) when a credit model is configured. Rounded to a
+    // whole dollar to stay compact.
+    const creditModel = config.get<string>("creditModel", "none");
+    if (creditModel !== "none" && this.state.totalNanoAiu > 0) {
+      const requestsPerDay = config.get<number>("requestsPerDay", 200);
+      const monthlyUsd = projectMonthlyUsd(
+        this.state.totalNanoAiu,
+        requestsPerDay
+      );
+      text += ` · ~$${Math.round(monthlyUsd).toLocaleString()}/mo`;
+    }
     if (this.currentFile && !this.isAlwaysOnPath(this.currentFile.path)) {
       text += ` / current: ${this.currentFile.tokens.toLocaleString()}`;
     }

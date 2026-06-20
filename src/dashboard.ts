@@ -90,6 +90,9 @@ export class TokoptDashboard implements vscode.Disposable {
       case "refresh":
         await this.refresh();
         return;
+      case "openReport":
+        await vscode.commands.executeCommand("tokopt.showOptimizationReport");
+        return;
       case "setModel": {
         if (typeof m.model === "string") {
           await vscode.workspace
