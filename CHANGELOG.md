@@ -6,6 +6,18 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.9.0] — 2026-06-20
+
+### Added
+
+- **🧬 "Anatomy of a request" — what you control** (new section in the Optimization Dashboard). Every Copilot request is assembled from ~7 canonical segments (system, always-on instructions, tools, history, retrieved context, user message, reasoning), but your repo only directly controls **two**: the always-on instructions and the tool catalog. The dashboard now shows all seven, green-highlighting the two repo-controlled segments with their measured tokens (e.g. always-on 2,412 tok, tools 920 tok) and marking the rest as "Copilot runtime". This grounds the optimization work — it makes explicit *where* your controllable tokens sit within the full request, so effort goes to the segments you can actually change.
+  - Replaces the originally-scoped "anatomy command UI": `tokopt anatomy` on a single customization file only classifies it as one segment (e.g. always-on 100%), which would just echo the CodeLens cost class. The educational 7-segment view is the higher-value reframing.
+  - New `toolsTokens` field on the dashboard data (sum of `mcp-config` files) feeds the "Tools" segment.
+
+### Internal / quality
+
+- 3 new unit tests (toolsTokens aggregation, 7-segment anatomy rendering with exactly two repo-controlled segments, dashboard includes the section) → **40 total**, all green via `node:test`.
+
 ## [0.8.0] — 2026-06-20
 
 ### Added / Changed (dashboard & status bar refinements)
