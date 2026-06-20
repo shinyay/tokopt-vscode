@@ -2,7 +2,7 @@
   "name": "tokopt-vscode",
   "displayName": "tokopt — Token Optimization for Copilot",
   "description": "Token-cost CodeLens + anti-pattern Diagnostics + Quick Fix + Status bar (always-on tax) + Token Cost TreeView for Copilot customization files (instructions, agents, skills).",
-  "version": "0.11.0",
+  "version": "0.12.0",
   "publisher": "shinyay",
   "license": "MIT",
   "repository": {
@@ -77,7 +77,7 @@
         "tokopt.creditModel": {
           "type": "string",
           "default": "none",
-          "markdownDescription": "Project token counts into **AI Credits (AIU)** and **USD** using this model's rate card (`tokopt --credit-model`). Use `none` to show token counts only.\n\nThe embedded rate card covers `gpt-5.5`, `claude-opus-4.7-1m-internal`, `gemini-3.1-pro-preview`, `mai-code-1-flash-internal`. To cost-project **any other model**, point `#tokopt.creditRatesPath#` at an external `rate-card.json` and set this to a model name it defines. An unknown model degrades to tokens-only. `1 AIU = $0.01`."
+          "markdownDescription": "Project token counts into **AI Credits (AIU)** and **USD** using this model's rate card (`tokopt --credit-model`). Use `none` to show token counts only.\n\nThe model picker is populated from your installed tokopt binary (`tokopt models`), so it lists every model the embedded rate card can price — 4 empirically measured plus catalog-derived rates for the rest. To cost-project a model the binary doesn't know, point `#tokopt.creditRatesPath#` at an external `rate-card.json` and set this to a model it defines. An unknown model degrades to tokens-only. `1 AIU = $0.01`."
         },
         "tokopt.creditRatesPath": {
           "type": "string",

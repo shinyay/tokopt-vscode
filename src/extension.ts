@@ -23,6 +23,7 @@ import { renderOptimizationReport } from "./optimizationReport.js";
 import { TokoptDashboard } from "./dashboard.js";
 import { UsageAnalysisPanel } from "./usageAnalysis.js";
 import { resolveCredit } from "./creditConfig.js";
+import { refreshEmbeddedModels } from "./embeddedModels.js";
 import { resetWarnings } from "./warnings.js";
 import {
   SLIM_FIXABLE,
@@ -306,6 +307,14 @@ export function activate(context: vscode.ExtensionContext): void {
       // would silently fail without ever toasting the user.
       if (e.affectsConfiguration("tokopt.binaryPath")) {
         resetWarnings();
+        // A different binary may embed a different model set — re-discover
+        // it, then re-render the cost surfaces once known.
+        void refreshEmbeddedModels(resolveBinary(), log).then(() => {
+          provider.clearCache();
+          provider.refresh();
+          void statusBar.refresh();
+          void dashboard.refreshIfOpen();
+        });
       }
       provider.clearCache();
       provider.refresh();
@@ -322,6 +331,21 @@ export function activate(context: vscode.ExtensionContext): void {
   void diagnostics.refresh();
   void statusBar.refresh();
   void statusBar.updateCurrentFile();
+
+  // Discover the binary's embedded model list so the picker + cost
+  // projection reflect every model the installed tokopt can price (not just
+  // the hardcoded fallback). Best-effort; re-render cost surfaces once known.
+  const refreshCostSurfaces = (): void => {
+    provider.clearCache();
+    provider.refresh();
+    void statusBar.refresh();
+    void dashboard.refreshIfOpen();
+  };
+  void refreshEmbeddedModels(resolveBinary(), log).then((models) => {
+    if (models.length > 0) {
+      refreshCostSurfaces();
+    }
+  });
   // Token-cost tree refresh is LAZY: deferred until the view becomes
   // visible (rubber-duck H#1 — don't audit large workspaces for users
   // who never open the panel). `onDidChangeVisibility` above handles
