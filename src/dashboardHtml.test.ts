@@ -6,6 +6,7 @@ import {
   hbarSvg,
   buildDashboardData,
   renderDashboardHtml,
+  renderPromptAnatomy,
   type DashboardData,
 } from "./dashboardHtml.js";
 import type { AuditResult } from "./audit.js";
@@ -189,4 +190,42 @@ test("renderDashboardHtml: heaviest-files list is scrollable + shows count", () 
   const html = renderDashboardHtml(data, { cspSource: "x", nonce: "N" });
   assert.match(html, /class="scroll-bars"/);
   assert.match(html, /Heaviest files <span class="subtle">\(3\)<\/span>/);
+});
+
+// ---- R4: prompt anatomy (educational) ----
+test("buildDashboardData: toolsTokens sums mcp-config files", () => {
+  const withMcp = { ...audit, files: [
+    ...audit.files,
+    { path: ".copilot/mcp-config.json", category: "mcp-config", scope: "conditional" as const, tokens: 857, bytes: 1 },
+    { path: ".vscode/mcp.json", category: "mcp-config", scope: "conditional" as const, tokens: 63, bytes: 1 },
+  ] };
+  const d = buildDashboardData(withMcp, [], { requestsPerDay: 200, generatedAt: "t" });
+  assert.equal(d.toolsTokens, 920);
+});
+
+test("renderPromptAnatomy: 7 segments, repo ones measured, runtime greyed", () => {
+  const withMcp = { ...audit, files: [
+    ...audit.files,
+    { path: ".copilot/mcp-config.json", category: "mcp-config", scope: "conditional" as const, tokens: 920, bytes: 1 },
+  ] };
+  const d = buildDashboardData(withMcp, [], { requestsPerDay: 200, generatedAt: "t" });
+  const html = renderPromptAnatomy(d);
+  // all 7 canonical segment names
+  for (const name of ["System", "Always-on instructions", "Tools", "History", "Retrieved context", "User message", "Reasoning"]) {
+    assert.match(html, new RegExp(name.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+  // repo-controlled measured values
+  assert.match(html, /2,412 tok/); // always-on
+  assert.match(html, /920 tok/);   // tools
+  // runtime segments marked
+  assert.match(html, /Copilot runtime/);
+  assert.match(html, /you control/);
+  // exactly two "you control" badges (always-on + tools)
+  assert.equal((html.match(/🔧 you control/g) || []).length, 2);
+});
+
+test("renderDashboardHtml: includes the anatomy section", () => {
+  const data = buildDashboardData(audit, findings, { creditModel: "gpt-5.5", requestsPerDay: 200, generatedAt: "t" });
+  const html = renderDashboardHtml(data, { cspSource: "x", nonce: "N" });
+  assert.match(html, /Anatomy of a request — what you control/);
 });

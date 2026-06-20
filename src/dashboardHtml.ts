@@ -53,6 +53,8 @@ export interface DashboardData {
   topFiles: DashboardFile[];
   findings: DashboardFinding[];
   totalTokens: number;
+  /** Sum of MCP tool-catalog tokens (the "tools" anatomy segment). */
+  toolsTokens: number;
   alwaysOnNanoAiu?: number;
   totalNanoAiu?: number;
 }
@@ -181,6 +183,9 @@ export function buildDashboardData(
     findings: dashFindings,
     totalTokens:
       audit.alwaysOnTotal + audit.conditionalTotal + audit.onDemandTotal,
+    toolsTokens: audit.files
+      .filter((f) => f.category === "mcp-config")
+      .reduce((sum, f) => sum + f.tokens, 0),
     alwaysOnNanoAiu: credit?.alwaysOnNanoAiu,
     totalNanoAiu: credit?.totalNanoAiu,
   };
@@ -356,6 +361,70 @@ function modelOptions(selected: string | undefined): string {
 /** Total estimated savings across findings. */
 function totalSavings(findings: DashboardFinding[]): number {
   return findings.reduce((s, f) => s + Math.max(0, f.estTokensSaved), 0);
+}
+
+interface AnatomySegment {
+  name: string;
+  control: "repo" | "copilot";
+  desc: string;
+  /** "always-on" | "tools" → measured from the workspace; else runtime. */
+  measure?: "always-on" | "tools";
+}
+
+/**
+ * The 7 canonical segments of a Copilot request, annotated with who
+ * controls each. Educational: it grounds the (small) set of segments the
+ * repo actually owns within the full request the model assembles.
+ */
+const ANATOMY_SEGMENTS: AnatomySegment[] = [
+  { name: "System", control: "copilot", desc: "Model + product system prompt — fixed by Copilot." },
+  { name: "Always-on instructions", control: "repo", measure: "always-on", desc: "copilot-instructions.md, AGENTS.md — sent on every request." },
+  { name: "Tools", control: "repo", measure: "tools", desc: "MCP tool catalog — sent on every agent step." },
+  { name: "History", control: "copilot", desc: "Prior turns of the conversation." },
+  { name: "Retrieved context", control: "copilot", desc: "Files / snippets pulled in (#-references, RAG)." },
+  { name: "User message", control: "copilot", desc: "What you type each turn." },
+  { name: "Reasoning", control: "copilot", desc: "Hidden model thinking — billed at the output rate." },
+];
+
+/**
+ * "Anatomy of a request" educational section — pure. Shows the 7 segments
+ * and marks which the repo controls (with measured tokens) vs which
+ * Copilot injects at runtime. This is the honest answer to "where do my
+ * controllable tokens sit?": only always-on instructions and the tool
+ * catalog are in your repo; the rest is assembled at request time.
+ */
+export function renderPromptAnatomy(data: DashboardData): string {
+  const alwaysOn = data.scopes.find((s) => s.scope === "always-on")?.tokens ?? 0;
+  const rows = ANATOMY_SEGMENTS.map((seg) => {
+    const repo = seg.control === "repo";
+    const measured =
+      seg.measure === "always-on"
+        ? alwaysOn
+        : seg.measure === "tools"
+          ? data.toolsTokens
+          : undefined;
+    const badge = repo
+      ? `<span class="ctl ctl-repo">🔧 you control</span>`
+      : `<span class="ctl ctl-copilot">⚙️ Copilot runtime</span>`;
+    const value =
+      measured !== undefined
+        ? `<span class="anatomy-val">${measured.toLocaleString()} tok</span>`
+        : `<span class="anatomy-val subtle">runtime</span>`;
+    return (
+      `<div class="anatomy-row${repo ? " repo" : ""}">` +
+      `<span class="anatomy-name">${escapeHtml(seg.name)}</span>` +
+      badge +
+      value +
+      `<span class="anatomy-desc">${escapeHtml(seg.desc)}</span>` +
+      `</div>`
+    );
+  }).join("");
+  return (
+    `<p class="subtle anatomy-lead">Every Copilot request is assembled from these segments. ` +
+    `You only directly control <strong>two</strong> from your repo — the always-on instructions and the tool catalog. ` +
+    `Your agents, skills and prompts fold into these when invoked (see the scope split above). Optimize what you control.</p>` +
+    `<div class="anatomy">${rows}</div>`
+  );
 }
 
 export function renderDashboardHtml(
@@ -591,6 +660,17 @@ export function renderDashboardHtml(
   .clickable:hover { text-decoration: underline; }
   .finding-rec { font-size: 0.85em; color: var(--vscode-descriptionForeground); }
   .empty { color: var(--vscode-descriptionForeground); font-style: italic; }
+  .anatomy-lead { margin: 4px 0 12px; max-width: 760px; }
+  .anatomy { display: flex; flex-direction: column; gap: 4px; }
+  .anatomy-row { display: grid; grid-template-columns: 170px 130px 90px 1fr; gap: 10px; align-items: center; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--vscode-panel-border); }
+  .anatomy-row.repo { border-left: 3px solid var(--vscode-charts-green); background: var(--vscode-editorWidget-background, var(--vscode-editor-background)); }
+  .anatomy-name { font-weight: 600; font-size: 0.9em; }
+  .ctl { font-size: 0.72em; padding: 1px 7px; border-radius: 10px; text-align: center; }
+  .ctl-repo { background: var(--vscode-charts-green); color: #06210a; }
+  .ctl-copilot { background: var(--vscode-input-background, rgba(127,127,127,.2)); color: var(--vscode-descriptionForeground); }
+  .anatomy-val { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.85em; }
+  .anatomy-desc { font-size: 0.82em; color: var(--vscode-descriptionForeground); }
+  @media (max-width: 760px) { .anatomy-row { grid-template-columns: 1fr auto auto; } .anatomy-desc { grid-column: 1 / -1; } }
   .footnote { margin-top: 28px; font-size: 0.78em; color: var(--vscode-descriptionForeground); border-top: 1px solid var(--vscode-panel-border); padding-top: 10px; }
 </style>
 </head>
@@ -634,6 +714,9 @@ export function renderDashboardHtml(
 
   <h2>Anti-patterns &amp; recommendations</h2>
   <div class="findings">${findingCards}</div>
+
+  <h2>Anatomy of a request — what you control</h2>
+  ${renderPromptAnatomy(data)}
 
   <div class="footnote">
     Generated ${escapeHtml(data.generatedAt)} · click a file or finding to open it.
