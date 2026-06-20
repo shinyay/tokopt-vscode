@@ -2,7 +2,7 @@
   "name": "tokopt-vscode",
   "displayName": "tokopt — Token Optimization for Copilot",
   "description": "Token-cost CodeLens + anti-pattern Diagnostics + Quick Fix + Status bar (always-on tax) + Token Cost TreeView for Copilot customization files (instructions, agents, skills).",
-  "version": "0.9.0",
+  "version": "0.10.0",
   "publisher": "shinyay",
   "license": "MIT",
   "repository": {
@@ -99,6 +99,12 @@
           "minimum": 0,
           "markdownDescription": "Assumed Copilot requests per day, used to project the **monthly** cost of the always-on tax in the CodeLens, status bar, and Optimization Report. Only affects display when `#tokopt.creditModel#` is set."
         },
+        "tokopt.usage.maxSessions": {
+          "type": "number",
+          "default": 500,
+          "minimum": 1,
+          "markdownDescription": "Maximum number of Copilot CLI session logs (newest first) to scan for the **Usage Analysis** view. Lower this if scanning `~/.copilot/session-state/` is slow."
+        },
         "tokopt.statusBar.enabled": {
           "type": "boolean",
           "default": true,
@@ -177,6 +183,11 @@
         "command": "tokopt.showDashboard",
         "title": "tokopt: Show Optimization Dashboard",
         "icon": "$(graph-line)"
+      },
+      {
+        "command": "tokopt.showUsageAnalysis",
+        "title": "tokopt: Show Usage Analysis",
+        "icon": "$(pulse)"
       },
       {
         "command": "tokopt.tree.refresh",
@@ -266,6 +277,9 @@
           "when": "workspaceFolderCount != 0"
         },
         {
+          "command": "tokopt.showUsageAnalysis"
+        },
+        {
           "command": "tokopt.tree.openFile",
           "when": "false"
         },
@@ -285,14 +299,19 @@
           "group": "navigation@0"
         },
         {
-          "command": "tokopt.showOptimizationReport",
+          "command": "tokopt.showUsageAnalysis",
           "when": "view == tokoptTokenCost",
           "group": "navigation@1"
         },
         {
-          "command": "tokopt.tree.refresh",
+          "command": "tokopt.showOptimizationReport",
           "when": "view == tokoptTokenCost",
           "group": "navigation@2"
+        },
+        {
+          "command": "tokopt.tree.refresh",
+          "when": "view == tokoptTokenCost",
+          "group": "navigation@3"
         }
       ],
       "view/item/context": [

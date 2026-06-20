@@ -390,6 +390,40 @@ set it renders tokens-only with a hint to enable cost.
 
 ---
 
+## 📉 Usage Analysis — the `tokopt tail` view (`v0.10.0`)
+
+Run **`tokopt: Show Usage Analysis`** (command palette) or click the 📉
+button on the Token Cost view toolbar to open a Webview that shows the
+**distribution and heavy tail of your actual token consumption** — the
+retrospective counterpart to the dashboard's prospective "what could it
+cost":
+
+- **Metric cards**: sessions analyzed, total input tokens (+ AI Credit /
+  USD), median (p50), p99.
+- **Distribution histogram** (inline SVG) — the shape of your usage.
+- **Percentile bars** — p50 / p90 / p95 / p99 / max.
+- **Heavy-tail table** — your most expensive sessions (tokens, cost,
+  requests, model, session id), headlined by "top 1% of sessions account
+  for N% of all input tokens". This is where the spend hides.
+
+The percentiles come straight from `tokopt tail`; the histogram is binned
+for the chart.
+
+### Data source & privacy
+
+- **Source**: Copilot CLI session logs (`~/.copilot/session-state/`) are
+  auto-discovered, or **pick any JSONL / CSV** with a `tokens` column.
+  > [!NOTE]
+  > VS Code Copilot Chat does **not** persist per-request token usage to
+  > disk — only the Copilot CLI does. So this view analyzes Copilot CLI
+  > usage (or a file you provide).
+- **🔒 Privacy**: it reads **only token counts, model names, request
+  counts and session ids** — never your prompts or replies.
+- `tokopt.usage.maxSessions` (default 500) caps how many CLI logs are
+  scanned (newest first).
+
+---
+
 ### Install the extension
 
 For now, install from a built `.vsix` (marketplace publishing TBD):

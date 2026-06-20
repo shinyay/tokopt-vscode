@@ -6,6 +6,22 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.10.0] — 2026-06-20
+
+### Added
+
+- **📉 Usage Analysis (the `tokopt tail` view)** (new command `tokopt: Show Usage Analysis`, also a toolbar button on the Token Cost view). A Webview that visualizes the **distribution and heavy tail of your token consumption** over a usage log — the retrospective counterpart to the workspace dashboard's "what could it cost".
+  - **Data source**: Copilot CLI session logs (`~/.copilot/session-state/*/events.jsonl`) are auto-discovered and analyzed, or you can **pick any JSONL / CSV** with a token column. (A spike confirmed VS Code Copilot Chat does **not** persist per-request usage to disk — only the Copilot CLI does — so this analyzes CLI usage or a file you provide.)
+  - **What it shows**: metric cards (sessions analyzed, total input tokens + AI Credit / USD, p50, p99), a **distribution histogram** (inline SVG), a **percentile bar chart** (p50/p90/p95/p99/max), and a **heavy-tail table** of your most expensive sessions (tokens, cost, requests, model, session id) with the headline "top 1% of sessions account for N% of all input tokens".
+  - The percentile numbers come straight from `tokopt tail --format json` (same analysis as the CLI); the histogram is binned in-process for the chart.
+  - **🔒 Privacy**: the view reads **only token counts, model names, request counts and session ids** — never your prompts or replies. The extraction (`extractUsageRow`) touches no conversation fields, and the footer states this.
+  - New setting `tokopt.usage.maxSessions` (default 500) caps how many CLI logs are scanned (newest first) for performance.
+
+### Internal / quality
+
+- New modules: `src/usageStats.ts` (pure percentile + histogram + heavy-tail math), `src/usageLog.ts` (CLI-log discovery + privacy-safe extraction + JSONL/CSV parsing), `src/usageDashboardHtml.ts` (pure SVG rendering), `src/tail.ts` (`tokopt tail` wrapper), `src/usageAnalysis.ts` (webview panel).
+- 23 new unit tests (percentile/histogram math, heavy-tail share, `session.shutdown` extraction incl. a privacy assertion that message content is never carried, JSONL/CSV parsing, HTML/CSP/chart structure) → **63 total**, all green via `node:test`.
+
 ## [0.9.0] — 2026-06-20
 
 ### Added
