@@ -6,7 +6,24 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
-## [0.11.0] — 2026-06-20
+## [0.12.0] — 2026-06-20
+
+### Added
+
+- **Model picker now discovers models from your tokopt binary.** The credit-model dropdowns (Optimization Dashboard, Usage Analysis) and the `tokopt.creditModel` setting are no longer limited to a hardcoded list of 4. On activation the extension runs `tokopt models --format json` and uses the result as the projectable set — so it automatically lists **every model the installed binary's embedded rate card can price** (19 with tokopt's expanded card: 4 empirically measured + 15 catalog-derived), and stays in sync as that card grows. No external `creditRatesPath` file needed for common models like `claude-opus-4.8`, `gpt-5.4`, `claude-haiku-4.5`.
+
+### Changed
+
+- `resolveCredit()` now defaults its projectable model set to the binary's embedded list (cached, discovered via `tokopt models`) instead of the hardcoded `CREDIT_MODELS`. This means a configured `creditModel` such as `claude-opus-4.8` is recognised and projects cost (previously it would silently degrade to tokens-only because the extension's hardcoded list didn't contain it). An external `creditRatesPath` still overrides, exactly as before.
+
+### Internal / quality
+
+- New `src/embeddedModels.ts`: a cached, best-effort `tokopt models --format json` fetch with a pure, unit-tested `parseModelsJson()` parser. Re-fetched on activation and whenever `tokopt.binaryPath` changes; falls back to the hardcoded list against older binaries that lack the `models` command, so cost projection degrades gracefully rather than breaking.
+- 5 new unit tests (`parseModelsJson`) → **73 total**, all green via `node:test`.
+
+### Requires
+
+- A tokopt binary with the `tokopt models` command (tokopt CLI shipping the expanded embedded rate card). Older binaries are tolerated via the fallback path.
 
 ### Added
 

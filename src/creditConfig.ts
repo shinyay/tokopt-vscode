@@ -1,6 +1,7 @@
 import * as fs from "node:fs";
 import * as vscode from "vscode";
 import { CREDIT_MODELS, parseRateCardModels } from "./credit.js";
+import { getEmbeddedModels } from "./embeddedModels.js";
 
 /**
  * Resolved credit configuration, derived from the user's settings and the
@@ -30,7 +31,10 @@ export function resolveCredit(
   const rawModel = (config.get<string>("creditModel", "none") || "none").trim();
   const ratesPathRaw = (config.get<string>("creditRatesPath", "") || "").trim();
 
-  let available: string[] = [...CREDIT_MODELS];
+  // Default projectable set = the binary's embedded card (discovered via
+  // `tokopt models`, cached). Falls back to the hardcoded list until the
+  // first successful fetch or against an older binary without the command.
+  let available: string[] = [...(getEmbeddedModels() ?? CREDIT_MODELS)];
   let ratesPath: string | undefined;
 
   if (ratesPathRaw) {
