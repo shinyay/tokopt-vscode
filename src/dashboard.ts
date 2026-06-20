@@ -3,6 +3,7 @@ import * as vscode from "vscode";
 import { runTokoptAudit } from "./audit.js";
 import { runTokoptDetect } from "./detect.js";
 import { buildDashboardData, renderDashboardHtml } from "./dashboardHtml.js";
+import { resolveCredit } from "./creditConfig.js";
 
 /** Cryptographically-cheap nonce for the webview CSP. */
 function makeNonce(): string {
@@ -155,11 +156,18 @@ export class TokoptDashboard implements vscode.Disposable {
       }
       const config = vscode.workspace.getConfiguration("tokopt");
       const binaryPath = this.resolveBinary();
-      const creditModel = config.get<string>("creditModel", "none");
-      const requestsPerDay = config.get<number>("requestsPerDay", 200);
+      const credit = resolveCredit(config, this.log);
+      const creditModel = credit.model;
+      const requestsPerDay = credit.requestsPerDay;
 
       const [auditOutcome, detectOutcome] = await Promise.all([
-        runTokoptAudit(binaryPath, folder.uri.fsPath, this.log, creditModel),
+        runTokoptAudit(
+          binaryPath,
+          folder.uri.fsPath,
+          this.log,
+          creditModel,
+          credit.ratesPath
+        ),
         runTokoptDetect(binaryPath, folder.uri.fsPath, this.log),
       ]);
 
@@ -177,6 +185,7 @@ export class TokoptDashboard implements vscode.Disposable {
         creditModel: creditModel === "none" ? undefined : creditModel,
         requestsPerDay,
         generatedAt: new Date().toISOString(),
+        availableModels: credit.available,
       });
 
       const nonce = makeNonce();

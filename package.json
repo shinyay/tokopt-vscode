@@ -2,7 +2,7 @@
   "name": "tokopt-vscode",
   "displayName": "tokopt — Token Optimization for Copilot",
   "description": "Token-cost CodeLens + anti-pattern Diagnostics + Quick Fix + Status bar (always-on tax) + Token Cost TreeView for Copilot customization files (instructions, agents, skills).",
-  "version": "0.10.0",
+  "version": "0.11.0",
   "publisher": "shinyay",
   "license": "MIT",
   "repository": {
@@ -77,21 +77,12 @@
         "tokopt.creditModel": {
           "type": "string",
           "default": "none",
-          "enum": [
-            "none",
-            "gpt-5.5",
-            "claude-opus-4.7-1m-internal",
-            "gemini-3.1-pro-preview",
-            "mai-code-1-flash-internal"
-          ],
-          "enumDescriptions": [
-            "Disabled — show token counts only (no cost projection).",
-            "GPT-5.5 rate card.",
-            "Claude Opus 4.7 (1M context) rate card.",
-            "Gemini 3.1 Pro rate card.",
-            "MAI-Code-1-Flash rate card."
-          ],
-          "markdownDescription": "Project token counts into **AI Credits (AIU)** and **USD** using this model's empirical rate card (`tokopt --credit-model`). When set, the CodeLens, status bar, and Optimization Report show estimated cost per request / month. `1 AIU = $0.01`."
+          "markdownDescription": "Project token counts into **AI Credits (AIU)** and **USD** using this model's rate card (`tokopt --credit-model`). Use `none` to show token counts only.\n\nThe embedded rate card covers `gpt-5.5`, `claude-opus-4.7-1m-internal`, `gemini-3.1-pro-preview`, `mai-code-1-flash-internal`. To cost-project **any other model**, point `#tokopt.creditRatesPath#` at an external `rate-card.json` and set this to a model name it defines. An unknown model degrades to tokens-only. `1 AIU = $0.01`."
+        },
+        "tokopt.creditRatesPath": {
+          "type": "string",
+          "default": "",
+          "markdownDescription": "Path to an external tokopt `rate-card.json` (passed as `tokopt --credit-rates`). Lets you cost-project **any model** — add `{\"models\": {\"<model>\": {\"rate_status\": \"ok\", \"nano_aiu_per_input_token\": <rate>}}}` entries. When set, its models replace the embedded card in the picker. Leave empty to use the built-in rate card."
         },
         "tokopt.requestsPerDay": {
           "type": "number",

@@ -22,6 +22,7 @@ import { runTokoptAudit } from "./audit.js";
 import { renderOptimizationReport } from "./optimizationReport.js";
 import { TokoptDashboard } from "./dashboard.js";
 import { UsageAnalysisPanel } from "./usageAnalysis.js";
+import { resolveCredit } from "./creditConfig.js";
 import { resetWarnings } from "./warnings.js";
 import {
   SLIM_FIXABLE,
@@ -431,8 +432,9 @@ export function activate(context: vscode.ExtensionContext): void {
         const config = vscode.workspace.getConfiguration("tokopt");
         const binaryPath =
           config.get<string>("binaryPath", "tokopt") || "tokopt";
-        const creditModel = config.get<string>("creditModel", "none");
-        const requestsPerDay = config.get<number>("requestsPerDay", 200);
+        const credit = resolveCredit(config, log);
+        const creditModel = credit.model;
+        const requestsPerDay = credit.requestsPerDay;
 
         await vscode.window.withProgress(
           {
@@ -442,7 +444,7 @@ export function activate(context: vscode.ExtensionContext): void {
           async () => {
             const root = folder.uri.fsPath;
             const [auditOutcome, detectOutcome] = await Promise.all([
-              runTokoptAudit(binaryPath, root, log, creditModel),
+              runTokoptAudit(binaryPath, root, log, creditModel, credit.ratesPath),
               runTokoptDetect(binaryPath, root, log),
             ]);
 

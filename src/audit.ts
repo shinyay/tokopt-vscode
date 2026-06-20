@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
-import { creditModelArgs } from "./credit.js";
+import { creditModelArgs, creditRatesArgs } from "./credit.js";
 import { SUPPORTED_FORMAT_VERSION } from "./tokopt.js";
 import { warnBinaryMissing, warnVersionMismatch } from "./warnings.js";
 
@@ -109,12 +109,19 @@ export async function runTokoptAudit(
   binaryPath: string,
   workspaceRoot: string,
   log: vscode.OutputChannel,
-  creditModel?: string
+  creditModel?: string,
+  creditRatesPath?: string
 ): Promise<AuditOutcome> {
   try {
     const { stdout } = await execFileAsync(
       binaryPath,
-      ["audit", "--format=json", ...creditModelArgs(creditModel), workspaceRoot],
+      [
+        "audit",
+        "--format=json",
+        ...creditModelArgs(creditModel),
+        ...creditRatesArgs(creditRatesPath),
+        workspaceRoot,
+      ],
       // Audit walks the workspace; allow more buffer/time than `count`
       // but still cap so a runaway scan can't hang the extension host.
       { timeout: 30_000, maxBuffer: 8 * 1024 * 1024 }

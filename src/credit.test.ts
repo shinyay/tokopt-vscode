@@ -9,6 +9,8 @@ import {
   formatAiu,
   formatUsd,
   creditModelArgs,
+  creditRatesArgs,
+  parseRateCardModels,
   isCreditEnabled,
   projectMonthlyAiu,
   projectMonthlyUsd,
@@ -63,6 +65,25 @@ test("creditModelArgs: enabled returns flag pair", () => {
     "--credit-model",
     "mai-code-1-flash-internal",
   ]);
+});
+
+test("creditRatesArgs: path → flag pair; empty → []", () => {
+  assert.deepEqual(creditRatesArgs("/tmp/rates.json"), [
+    "--credit-rates",
+    "/tmp/rates.json",
+  ]);
+  assert.deepEqual(creditRatesArgs(undefined), []);
+  assert.deepEqual(creditRatesArgs(""), []);
+});
+
+test("parseRateCardModels: returns model keys; malformed → []", () => {
+  const card = JSON.stringify({
+    format_version: 1,
+    models: { "claude-opus-4.8": { nano_aiu_per_input_token: 500000 }, "o3": {} },
+  });
+  assert.deepEqual(parseRateCardModels(card), ["claude-opus-4.8", "o3"]);
+  assert.deepEqual(parseRateCardModels("not json"), []);
+  assert.deepEqual(parseRateCardModels("{}"), []);
 });
 
 test("isCreditEnabled mirrors creditModelArgs", () => {

@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
-import { creditModelArgs } from "./credit.js";
+import { creditModelArgs, creditRatesArgs } from "./credit.js";
 import { SUPPORTED_FORMAT_VERSION } from "./tokopt.js";
 
 const execFileAsync = promisify(execFile);
@@ -47,7 +47,7 @@ function isErrnoException(e: unknown): e is NodeJS.ErrnoException {
 export async function runTokoptTail(
   binaryPath: string,
   inputPath: string,
-  opts: { column?: string; top?: number; creditModel?: string },
+  opts: { column?: string; top?: number; creditModel?: string; creditRatesPath?: string },
   log: vscode.OutputChannel
 ): Promise<TailOutcome> {
   try {
@@ -61,6 +61,7 @@ export async function runTokoptTail(
       String(opts.top ?? 10),
       "--format=json",
       ...creditModelArgs(opts.creditModel),
+      ...creditRatesArgs(opts.creditRatesPath),
     ];
     const { stdout } = await execFileAsync(binaryPath, args, {
       timeout: 20_000,

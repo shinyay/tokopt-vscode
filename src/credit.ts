@@ -96,6 +96,36 @@ export function creditModelArgs(model: string | undefined | null): string[] {
   return ["--credit-model", model];
 }
 
+/**
+ * Resolve the `--credit-rates` CLI args for an external rate-card path.
+ * Returns [] when no path is set. The CLI only consults this flag when
+ * `--credit-model` is also passed.
+ */
+export function creditRatesArgs(ratesPath: string | undefined | null): string[] {
+  if (!ratesPath) {
+    return [];
+  }
+  return ["--credit-rates", ratesPath];
+}
+
+/**
+ * Parse the `models` object of a tokopt rate-card.json into its model
+ * names. Returns [] on malformed input. PURE — unit-testable; the fs read
+ * happens in the caller (creditConfig.ts) so this stays vscode/fs-free.
+ */
+export function parseRateCardModels(jsonContent: string): string[] {
+  try {
+    const o = JSON.parse(jsonContent) as Record<string, unknown>;
+    const models = o?.models;
+    if (models && typeof models === "object") {
+      return Object.keys(models as Record<string, unknown>);
+    }
+  } catch {
+    /* ignore */
+  }
+  return [];
+}
+
 /** True when a configured model value should trigger cost projection. */
 export function isCreditEnabled(model: string | undefined | null): boolean {
   return creditModelArgs(model).length > 0;

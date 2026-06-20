@@ -6,6 +6,26 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.11.0] — 2026-06-20
+
+### Added
+
+- **Custom rate cards — cost-project _any_ model** (new setting `tokopt.creditRatesPath`). The embedded rate card only covers 4 measured models, and `tokopt --credit-model` errors on anything else. Point `tokopt.creditRatesPath` at an external `rate-card.json` (`{"models": {"<model>": {"rate_status": "ok", "nano_aiu_per_input_token": <rate>}}}`) and you can now project cost for **any model you run in VS Code** — Claude Opus 4.8, o3, DeepSeek, etc. The path is threaded as `--credit-rates` through every credit call (count / audit / tail).
+- **Dynamic model picker** — the in-panel model dropdowns (Optimization Dashboard, Usage Analysis) are no longer a hardcoded list. They now reflect the **active rate card**: the external card's models when `creditRatesPath` is set, otherwise the embedded four. A configured model that isn't in the card still shows as selected.
+
+### Changed
+
+- `tokopt.creditModel` is now a **free-form string** instead of a fixed enum, so external-card model names are accepted. An unknown model **degrades gracefully to tokens-only** (it is no longer passed to the CLI, so the CodeLens never disappears) — resolved centrally by the new `resolveCredit()` helper, which all surfaces (CodeLens, status bar, tree, dashboards, report) now share.
+
+### Internal / quality
+
+- New `src/creditConfig.ts` (`resolveCredit`) centralizes credit settings resolution + the invalid-model fallback. `src/credit.ts` gains pure `creditRatesArgs()` and `parseRateCardModels()`. `modelOptions()` is now exported and data-driven.
+- 5 new unit tests (`creditRatesArgs`, `parseRateCardModels`, dynamic `modelOptions` incl. external-card list + selected-not-in-list) → **68 total**, all green via `node:test`. External-card projection verified end-to-end (`claude-opus-4.8` via a custom card → 315M nano-AIU).
+
+### Note
+
+The embedded rate card is empirically calibrated for 4 models; external-card rates for other models are **estimates** (tokopt is "a sanity-checker and before/after diff tool, not a billing oracle for non-OpenAI model families"). Expanding the embedded card with official per-model rates is tracked separately in the `tokopt` CLI.
+
 ## [0.10.0] — 2026-06-20
 
 ### Added
