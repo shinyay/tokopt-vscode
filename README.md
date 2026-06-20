@@ -340,6 +340,20 @@ files are priced per invocation / per use.
 > estimates from a Copilot-CLI-calibrated rate card; real billing
 > varies with cache hits, output, and reasoning tokens.
 
+### Cost-project any model (custom rate cards)
+
+The embedded rate card covers four measured models. To estimate cost for
+**any other model you run in VS Code** (Claude Opus 4.8, o3, DeepSeek, …),
+point `tokopt.creditRatesPath` at an external `rate-card.json`:
+
+```json
+{ "models": { "claude-opus-4.8": { "rate_status": "ok", "nano_aiu_per_input_token": 500000 } } }
+```
+
+…then set `tokopt.creditModel` to a model it defines. The in-panel model
+pickers (Dashboard, Usage Analysis) then list that card's models. An
+unknown model degrades to tokens-only.
+
 ---
 
 ## 📈 Workspace Optimization Report (`v0.7.0`)

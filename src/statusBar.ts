@@ -3,6 +3,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { classifyCustomizationFile } from "./customizationFiles.js";
 import { formatAiu, formatUsd, projectMonthlyAiu, projectMonthlyUsd } from "./credit.js";
+import { resolveCredit } from "./creditConfig.js";
 import { runTokoptCount } from "./tokopt.js";
 
 /**
@@ -332,9 +333,11 @@ export class TokoptStatusBarManager implements vscode.Disposable {
       return { kind: "skip" };
     }
     const cached = this.cache.get(filePath);
-    const creditModel = vscode.workspace
-      .getConfiguration("tokopt")
-      .get<string>("creditModel", "none");
+    const credit = resolveCredit(
+      vscode.workspace.getConfiguration("tokopt"),
+      this.log
+    );
+    const creditModel = credit.model;
     if (
       cached &&
       cached.mtimeMs === mtimeMs &&
@@ -348,7 +351,8 @@ export class TokoptStatusBarManager implements vscode.Disposable {
       binaryPath,
       filePath,
       this.log,
-      creditModel
+      creditModel,
+      credit.ratesPath
     );
     if (outcome.kind === "binary-missing") {
       return { kind: "binary-missing" };
@@ -378,7 +382,8 @@ export class TokoptStatusBarManager implements vscode.Disposable {
       return;
     }
     const binaryPath = config.get<string>("binaryPath", "tokopt") || "tokopt";
-    const creditModel = config.get<string>("creditModel", "none");
+    const credit = resolveCredit(config, this.log);
+    const creditModel = credit.model;
 
     const files = this.discoverAlwaysOnFiles();
     if (files.length === 0) {
@@ -427,7 +432,8 @@ export class TokoptStatusBarManager implements vscode.Disposable {
           binaryPath,
           filePath,
           this.log,
-          creditModel
+          creditModel,
+          credit.ratesPath
         );
         // Bail before mutating anything if a clear()/refresh() has
         // superseded us during the async call.
@@ -524,7 +530,7 @@ export class TokoptStatusBarManager implements vscode.Disposable {
     // R2: surface the monthly cost compactly in the bar text itself (not
     // just the tooltip) when a credit model is configured. Rounded to a
     // whole dollar to stay compact.
-    const creditModel = config.get<string>("creditModel", "none");
+    const creditModel = resolveCredit(config, this.log).model;
     if (creditModel !== "none" && this.state.totalNanoAiu > 0) {
       const requestsPerDay = config.get<number>("requestsPerDay", 200);
       const monthlyUsd = projectMonthlyUsd(
@@ -580,7 +586,7 @@ export class TokoptStatusBarManager implements vscode.Disposable {
       // Cost projection (Feature: credit projection). Rendered only when a
       // credit model is configured and the CLI returned nano-AIU.
       const config = vscode.workspace.getConfiguration("tokopt");
-      const creditModel = config.get<string>("creditModel", "none");
+      const creditModel = resolveCredit(config, this.log).model;
       if (creditModel !== "none" && this.state.totalNanoAiu > 0) {
         const requestsPerDay = config.get<number>("requestsPerDay", 200);
         const monthlyAiu = projectMonthlyAiu(

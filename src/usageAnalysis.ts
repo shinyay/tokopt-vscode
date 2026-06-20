@@ -3,6 +3,7 @@ import * as os from "node:os";
 import * as path from "node:path";
 import * as vscode from "vscode";
 import { runTokoptTail } from "./tail.js";
+import { resolveCredit } from "./creditConfig.js";
 import { histogram, computeStats, type UsageStats } from "./usageStats.js";
 import {
   loadCopilotCliRows,
@@ -111,7 +112,8 @@ export class UsageAnalysisPanel implements vscode.Disposable {
     try {
       const config = vscode.workspace.getConfiguration("tokopt");
       const binaryPath = this.resolveBinary();
-      const creditModel = config.get<string>("creditModel", "none");
+      const credit = resolveCredit(config, this.log);
+      const creditModel = credit.model;
       const maxSessions = config.get<number>("usage.maxSessions", 500);
 
       // 1. Load rows (token counts + metadata only)
@@ -128,7 +130,7 @@ export class UsageAnalysisPanel implements vscode.Disposable {
       const nonce = makeNonce();
       if (rows.length === 0) {
         this.panel.webview.html = renderUsageHtml(
-          this.emptyData(sourceLabel, creditModel),
+          this.emptyData(sourceLabel, creditModel, credit.available),
           { cspSource: this.panel.webview.cspSource, nonce }
         );
         return;
@@ -157,7 +159,7 @@ export class UsageAnalysisPanel implements vscode.Disposable {
       const tail = await runTokoptTail(
         binaryPath,
         tmpFile,
-        { column: "tokens", top: 10, creditModel },
+        { column: "tokens", top: 10, creditModel, creditRatesPath: credit.ratesPath },
         this.log
       );
 
@@ -195,6 +197,7 @@ export class UsageAnalysisPanel implements vscode.Disposable {
         outliers,
         totalNanoAiu: totalNanoAiu > 0 ? totalNanoAiu : undefined,
         creditModel: creditModel === "none" ? undefined : creditModel,
+        availableModels: credit.available,
         generatedAt: new Date().toISOString(),
       };
       this.panel.webview.html = renderUsageHtml(data, {
@@ -213,7 +216,11 @@ export class UsageAnalysisPanel implements vscode.Disposable {
     }
   }
 
-  private emptyData(sourceLabel: string, creditModel: string): UsageViewData {
+  private emptyData(
+    sourceLabel: string,
+    creditModel: string,
+    available: string[]
+  ): UsageViewData {
     return {
       sourceLabel,
       recordCount: 0,
@@ -221,6 +228,7 @@ export class UsageAnalysisPanel implements vscode.Disposable {
       histogram: [],
       outliers: [],
       creditModel: creditModel === "none" ? undefined : creditModel,
+      availableModels: available,
       generatedAt: new Date().toISOString(),
     };
   }

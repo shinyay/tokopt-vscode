@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
-import { creditModelArgs } from "./credit.js";
+import { creditModelArgs, creditRatesArgs } from "./credit.js";
 import { warnBinaryMissing, warnVersionMismatch } from "./warnings.js";
 
 const execFileAsync = promisify(execFile);
@@ -50,12 +50,19 @@ export async function runTokoptCount(
   binaryPath: string,
   filePath: string,
   log: vscode.OutputChannel,
-  creditModel?: string
+  creditModel?: string,
+  creditRatesPath?: string
 ): Promise<CountOutcome> {
   try {
     const { stdout } = await execFileAsync(
       binaryPath,
-      ["count", "--format=json", ...creditModelArgs(creditModel), filePath],
+      [
+        "count",
+        "--format=json",
+        ...creditModelArgs(creditModel),
+        ...creditRatesArgs(creditRatesPath),
+        filePath,
+      ],
       { timeout: 10_000, maxBuffer: 1024 * 1024 }
     );
 

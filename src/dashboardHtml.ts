@@ -57,6 +57,8 @@ export interface DashboardData {
   toolsTokens: number;
   alwaysOnNanoAiu?: number;
   totalNanoAiu?: number;
+  /** Models the active rate card can project (for the in-panel dropdown). */
+  availableModels?: string[];
 }
 
 export const SCOPE_META: Record<
@@ -115,6 +117,7 @@ export function buildDashboardData(
     requestsPerDay: number;
     generatedAt: string;
     topFileLimit?: number;
+    availableModels?: string[];
   }
 ): DashboardData {
   const limit = opts.topFileLimit ?? 40;
@@ -188,6 +191,7 @@ export function buildDashboardData(
       .reduce((sum, f) => sum + f.tokens, 0),
     alwaysOnNanoAiu: credit?.alwaysOnNanoAiu,
     totalNanoAiu: credit?.totalNanoAiu,
+    availableModels: opts.availableModels,
   };
 }
 
@@ -339,15 +343,31 @@ function metricCard(opts: {
   );
 }
 
-function modelOptions(selected: string | undefined): string {
-  const models = [
-    "none",
-    "gpt-5.5",
-    "claude-opus-4.7-1m-internal",
-    "gemini-3.1-pro-preview",
-    "mai-code-1-flash-internal",
-  ];
+/** Default models when no rate card override is supplied. */
+const DEFAULT_MODELS = [
+  "gpt-5.5",
+  "claude-opus-4.7-1m-internal",
+  "gemini-3.1-pro-preview",
+  "mai-code-1-flash-internal",
+];
+
+/**
+ * Build the `<option>`s for the in-panel model picker. The list is the
+ * active rate card's models (`available`, falling back to the embedded
+ * defaults), always prefixed with "none". The currently-selected value is
+ * included even if it's not in the list, so a custom external-card model
+ * still shows as selected.
+ */
+export function modelOptions(
+  selected: string | undefined,
+  available?: string[]
+): string {
+  const base = available && available.length > 0 ? available : DEFAULT_MODELS;
   const sel = selected && selected !== "" ? selected : "none";
+  const models = ["none", ...base];
+  if (sel !== "none" && !models.includes(sel)) {
+    models.push(sel);
+  }
   return models
     .map(
       (m) =>
@@ -681,7 +701,7 @@ export function renderDashboardHtml(
   )}</div>
   <div class="toolbar">
     <label for="model">Cost model</label>
-    <select id="model">${modelOptions(data.creditModel)}</select>
+    <select id="model">${modelOptions(data.creditModel, data.availableModels)}</select>
     <label for="rpd">Requests/day</label>
     <input id="rpd" type="number" min="0" value="${data.requestsPerDay}" />
     <button id="refresh">↻ Refresh</button>

@@ -1,4 +1,4 @@
-import { escapeHtml } from "./dashboardHtml.js";
+import { escapeHtml, modelOptions } from "./dashboardHtml.js";
 import {
   formatAiu,
   formatUsd,
@@ -24,6 +24,7 @@ export interface UsageViewData {
   /** Sum of nano-AIU across all rows (when available). */
   totalNanoAiu?: number;
   creditModel?: string;
+  availableModels?: string[];
   generatedAt: string;
 }
 
@@ -215,11 +216,7 @@ export function renderUsageHtml(
   <div class="subtle">${escapeHtml(data.sourceLabel)} · token-consumption distribution (the same analysis as <code>tokopt tail</code>)</div>
   <div class="toolbar">
     <label for="model">Cost model</label>
-    <select id="model">
-      ${["none", "gpt-5.5", "claude-opus-4.7-1m-internal", "gemini-3.1-pro-preview", "mai-code-1-flash-internal"]
-        .map((m) => `<option value="${escapeHtml(m)}"${m === (data.creditModel ?? "none") ? " selected" : ""}>${escapeHtml(m === "none" ? "none (tokens only)" : m)}</option>`)
-        .join("")}
-    </select>
+    <select id="model">${modelOptions(data.creditModel, data.availableModels)}</select>
     <button id="refresh">↻ Refresh</button>
     <button id="pick" class="secondary">📂 Pick log file…</button>
     <span class="subtle">${modelNote}</span>

@@ -9,6 +9,7 @@ import {
   projectMonthlyAiu,
   projectMonthlyUsd,
 } from "./credit.js";
+import { resolveCredit } from "./creditConfig.js";
 
 const REFRESH_DEBOUNCE_MS = 250;
 const SCOPE_ORDER: AuditFile["scope"][] = [
@@ -141,7 +142,7 @@ export class TokenCostTreeProvider
       const scopeNano = this.scopeNanoAiu(node.scope);
       if (scopeNano !== null && scopeNano > 0) {
         const cfg = vscode.workspace.getConfiguration("tokopt");
-        const model = cfg.get<string>("creditModel", "none");
+        const model = resolveCredit(cfg, this.log).model;
         if (node.scope === "always-on") {
           const requestsPerDay = cfg.get<number>("requestsPerDay", 200);
           tooltipMd +=
@@ -369,9 +370,11 @@ export class TokenCostTreeProvider
 
     const myGen = ++this.generation;
     const binaryPath = this.resolveBinary();
-    const creditModel = vscode.workspace
-      .getConfiguration("tokopt")
-      .get<string>("creditModel", "none");
+    const credit = resolveCredit(
+      vscode.workspace.getConfiguration("tokopt"),
+      this.log
+    );
+    const creditModel = credit.model;
 
     // Run all folder audits in parallel. Per-folder errors don't fail
     // the whole tree — they show as a per-folder absence in
@@ -383,7 +386,8 @@ export class TokenCostTreeProvider
           binaryPath,
           folder.uri.fsPath,
           this.log,
-          creditModel
+          creditModel,
+          credit.ratesPath
         );
         return { folder, outcome, binaryPath };
       })

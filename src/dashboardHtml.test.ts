@@ -7,6 +7,7 @@ import {
   buildDashboardData,
   renderDashboardHtml,
   renderPromptAnatomy,
+  modelOptions,
   type DashboardData,
 } from "./dashboardHtml.js";
 import type { AuditResult } from "./audit.js";
@@ -228,4 +229,27 @@ test("renderDashboardHtml: includes the anatomy section", () => {
   const data = buildDashboardData(audit, findings, { creditModel: "gpt-5.5", requestsPerDay: 200, generatedAt: "t" });
   const html = renderDashboardHtml(data, { cspSource: "x", nonce: "N" });
   assert.match(html, /Anatomy of a request — what you control/);
+});
+
+// ---- Phase 24: dynamic model dropdown ----
+test("modelOptions: defaults when no available list", () => {
+  const html = modelOptions("gpt-5.5");
+  assert.match(html, /value="none"/);
+  assert.match(html, /value="gpt-5.5"[^>]*selected/);
+  assert.match(html, /value="claude-opus-4.7-1m-internal"/);
+});
+
+test("modelOptions: uses the supplied available list (external card)", () => {
+  const html = modelOptions("claude-opus-4.8", ["claude-opus-4.8", "o3", "deepseek-v4"]);
+  assert.match(html, /value="none"/);
+  assert.match(html, /value="claude-opus-4.8"[^>]*selected/);
+  assert.match(html, /value="o3"/);
+  assert.match(html, /value="deepseek-v4"/);
+  // embedded defaults are NOT shown when an external list is supplied
+  assert.doesNotMatch(html, /value="gpt-5.5"/);
+});
+
+test("modelOptions: keeps a selected value not in the available list", () => {
+  const html = modelOptions("custom-model", ["gpt-5.5"]);
+  assert.match(html, /value="custom-model"[^>]*selected/);
 });

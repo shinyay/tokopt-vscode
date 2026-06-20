@@ -1,5 +1,6 @@
 import * as vscode from "vscode";
 import { formatCostSuffix } from "./credit.js";
+import { resolveCredit } from "./creditConfig.js";
 import { classifyCustomizationFile } from "./customizationFiles.js";
 import { CountResult, runTokoptCount } from "./tokopt.js";
 
@@ -105,7 +106,8 @@ export class TokoptCodeLensProvider implements vscode.CodeLensProvider {
     document: vscode.TextDocument,
     config: vscode.WorkspaceConfiguration
   ): Promise<CountResult | null> {
-    const creditModel = config.get<string>("creditModel", "none");
+    const credit = resolveCredit(config, this.log);
+    const creditModel = credit.model;
     const key = document.uri.toString();
     const cached = this.cache.get(key);
     if (
@@ -128,7 +130,8 @@ export class TokoptCodeLensProvider implements vscode.CodeLensProvider {
       binaryPath,
       document.uri.fsPath,
       this.log,
-      creditModel
+      creditModel,
+      credit.ratesPath
     );
 
     if (outcome.kind !== "ok") {
