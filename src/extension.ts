@@ -21,6 +21,7 @@ import { runTokoptDetect } from "./detect.js";
 import { runTokoptAudit } from "./audit.js";
 import { renderOptimizationReport } from "./optimizationReport.js";
 import { TokoptDashboard } from "./dashboard.js";
+import { UsageAnalysisPanel } from "./usageAnalysis.js";
 import { resetWarnings } from "./warnings.js";
 import {
   SLIM_FIXABLE,
@@ -136,6 +137,9 @@ export function activate(context: vscode.ExtensionContext): void {
 
   const dashboard = new TokoptDashboard(log, resolveBinary);
   context.subscriptions.push(dashboard);
+
+  const usageAnalysis = new UsageAnalysisPanel(log, resolveBinary);
+  context.subscriptions.push(usageAnalysis);
   context.subscriptions.push(
     tokenCostView.onDidChangeVisibility((e) =>
       tokenCost.onVisibilityChange(e.visible)
@@ -481,6 +485,17 @@ export function activate(context: vscode.ExtensionContext): void {
   context.subscriptions.push(
     vscode.commands.registerCommand("tokopt.showDashboard", () => {
       void dashboard.show();
+    })
+  );
+
+  // ---- Usage Analysis (tail) webview ----------------------------------
+  //
+  // Distribution + heavy-tail of token consumption over a usage log
+  // (Copilot CLI session logs by default, or a picked JSONL/CSV). Reads
+  // only token counts + session metadata — never conversation content.
+  context.subscriptions.push(
+    vscode.commands.registerCommand("tokopt.showUsageAnalysis", () => {
+      void usageAnalysis.show();
     })
   );
 
