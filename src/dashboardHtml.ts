@@ -1,5 +1,6 @@
 import type { AuditResult, AuditFile } from "./audit.js";
 import type { Finding } from "./detect.js";
+import type { ModelCostRow } from "./bymodel.js";
 import {
   formatAiu,
   formatUsd,
@@ -59,6 +60,8 @@ export interface DashboardData {
   totalNanoAiu?: number;
   /** Models the active rate card can project (for the in-panel dropdown). */
   availableModels?: string[];
+  /** Per-model cost ranking from `tokopt report --by-model` (cheapest first). */
+  modelComparison?: ModelCostRow[];
 }
 
 export const SCOPE_META: Record<
@@ -118,6 +121,7 @@ export function buildDashboardData(
     generatedAt: string;
     topFileLimit?: number;
     availableModels?: string[];
+    modelComparison?: ModelCostRow[];
   }
 ): DashboardData {
   const limit = opts.topFileLimit ?? 40;
@@ -192,6 +196,7 @@ export function buildDashboardData(
     alwaysOnNanoAiu: credit?.alwaysOnNanoAiu,
     totalNanoAiu: credit?.totalNanoAiu,
     availableModels: opts.availableModels,
+    modelComparison: opts.modelComparison,
   };
 }
 
@@ -350,6 +355,75 @@ const DEFAULT_MODELS = [
   "gemini-3.1-pro-preview",
   "mai-code-1-flash-internal",
 ];
+
+/**
+ * Render the "Model cost comparison" section: one horizontal bar per model
+ * (cheapest-first, order preserved from the CLI) showing this repo's projected
+ * always-on AI Credit cost, with a basis badge, the USD/turn equivalent, and
+ * the currently-selected model highlighted. Each row is click-to-select
+ * (`data-model` → setModel). Returns "" when there are no rows so the whole
+ * section (heading included) is omitted — e.g. against an older CLI without
+ * `report --by-model`.
+ */
+export function modelComparisonSection(
+  rows: ModelCostRow[],
+  selectedModel?: string
+): string {
+  if (!rows || rows.length === 0) {
+    return "";
+  }
+  // The CLI already returns ascending cost order; sort a copy defensively so
+  // the "cheapest first" copy is always true regardless of input order.
+  const sorted = [...rows].sort(
+    (a, b) => a.alwaysOnNanoAiu - b.alwaysOnNanoAiu
+  );
+  const max = Math.max(...sorted.map((r) => r.alwaysOnNanoAiu), 1);
+  const items = sorted
+    .map((r) => {
+      const pct = Math.max(0, (r.alwaysOnNanoAiu / max) * 100);
+      const selected =
+        selectedModel && selectedModel !== "none" && r.name === selectedModel;
+      const badgeClass =
+        r.basis === "empirical" ? "basis-empirical" : "basis-catalog";
+      const badge = r.basis
+        ? `<span class="basis-badge ${badgeClass}" title="${
+            r.basis === "empirical"
+              ? "measured rate"
+              : "catalog list-price estimate (upper bound)"
+          }">${escapeHtml(r.basis === "empirical" ? "measured" : "est.")}</span>`
+        : "";
+      const aiu = formatAiu(nanoAiuToAiu(r.alwaysOnNanoAiu));
+      const usd = formatUsd(nanoAiuToUsd(r.alwaysOnNanoAiu));
+      const aria = `${r.name}${selected ? " (selected)" : ""}: ${aiu} AI Credit per turn, ${
+        r.basis || "rate"
+      }`;
+      return (
+        `<div class="bar-row clickable model-row${
+          selected ? " selected" : ""
+        }" data-model="${escapeHtml(r.name)}" tabindex="0" role="button" aria-label="${escapeHtml(
+          aria
+        )}">` +
+        `<div class="bar-label" title="${escapeHtml(r.name)}">${escapeHtml(
+          r.name
+        )}${badge}</div>` +
+        `<div class="bar-track"><div class="bar-fill" style="width:${pct.toFixed(
+          1
+        )}%;background:var(--vscode-charts-blue)"></div></div>` +
+        `<div class="bar-value">${escapeHtml(aiu)}<span class="bar-usd">${escapeHtml(
+          usd
+        )}</span></div>` +
+        `</div>`
+      );
+    })
+    .join("");
+  return (
+    `<h2>Model cost comparison <span class="subtle">(${rows.length} models · always-on AI Credit / turn)</span></h2>` +
+    `<p class="subtle model-compare-lead">Cheapest first for <em>this repo's</em> always-on tax. Click a model to select it. ` +
+    `<span class="basis-badge basis-empirical">measured</span> = calibrated; ` +
+    `<span class="basis-badge basis-catalog">est.</span> = catalog list-price upper bound.</p>` +
+    `<div class="bars scroll-bars model-compare" role="list">${items}</div>`
+  );
+}
 
 /**
  * Build the `<option>`s for the in-panel model picker. The list is the
@@ -604,6 +678,12 @@ export function renderDashboardHtml(
       )}</strong> · 1 AIU = $0.01 · monthly assumes ${data.requestsPerDay.toLocaleString()} req/day`
     : `Set a cost model to project AI Credits / USD.`;
 
+  // ---- Model cost comparison (from `tokopt report --by-model`) ----
+  const modelCompare = modelComparisonSection(
+    data.modelComparison ?? [],
+    data.creditModel
+  );
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -667,6 +747,12 @@ export function renderDashboardHtml(
   .bar-track { background: var(--vscode-input-background, rgba(127,127,127,.15)); border-radius: 4px; height: 14px; overflow: hidden; }
   .bar-fill { height: 100%; border-radius: 4px; min-width: 2px; }
   .bar-value { text-align: right; font-variant-numeric: tabular-nums; font-size: 0.85em; }
+  .bar-usd { display: block; color: var(--vscode-descriptionForeground); font-size: 0.82em; }
+  .model-compare .bar-row.selected { background: var(--vscode-list-activeSelectionBackground, var(--vscode-list-hoverBackground)); outline: 1px solid var(--vscode-focusBorder); }
+  .model-compare-lead { margin: 2px 0 10px; }
+  .basis-badge { font-size: 0.68em; padding: 1px 6px; border-radius: 10px; margin-left: 6px; text-transform: uppercase; letter-spacing: .03em; vertical-align: middle; }
+  .basis-empirical { background: var(--vscode-charts-green); color: #06210a; }
+  .basis-catalog { background: var(--vscode-input-background, rgba(127,127,127,.2)); color: var(--vscode-descriptionForeground); }
   .two-col { display: grid; grid-template-columns: 1fr 1fr; gap: 24px; }
   @media (max-width: 760px) { .two-col { grid-template-columns: 1fr; } }
   .findings { display: flex; flex-direction: column; gap: 8px; }
@@ -717,6 +803,8 @@ export function renderDashboardHtml(
     <ul class="legend">${legend}</ul>
   </div>
 
+  ${modelCompare}
+
   <div class="two-col">
     <div>
       <h2>Heaviest files <span class="subtle">(${data.topFiles.length})</span></h2>
@@ -754,6 +842,13 @@ export function renderDashboardHtml(
       el.addEventListener("click", () => openPath(el.getAttribute("data-path")));
       el.addEventListener("keydown", (e) => {
         if (e.key === "Enter" || e.key === " ") { e.preventDefault(); openPath(el.getAttribute("data-path")); }
+      });
+    });
+    function selectModel(m) { if (m) vscode.postMessage({ type: "setModel", model: m }); }
+    document.querySelectorAll("[data-model]").forEach((el) => {
+      el.addEventListener("click", () => selectModel(el.getAttribute("data-model")));
+      el.addEventListener("keydown", (e) => {
+        if (e.key === "Enter" || e.key === " ") { e.preventDefault(); selectModel(el.getAttribute("data-model")); }
       });
     });
     document.getElementById("refresh").addEventListener("click", () => vscode.postMessage({ type: "refresh" }));

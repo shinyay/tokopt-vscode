@@ -2,6 +2,7 @@ import * as path from "node:path";
 import * as vscode from "vscode";
 import { runTokoptAudit } from "./audit.js";
 import { runTokoptDetect } from "./detect.js";
+import { runReportByModel } from "./bymodel.js";
 import { buildDashboardData, renderDashboardHtml } from "./dashboardHtml.js";
 import { resolveCredit } from "./creditConfig.js";
 
@@ -95,7 +96,13 @@ export class TokoptDashboard implements vscode.Disposable {
         await vscode.commands.executeCommand("tokopt.showOptimizationReport");
         return;
       case "setModel": {
-        if (typeof m.model === "string") {
+        // Defense-in-depth: the value originates from our own webview, but
+        // cap length and reject control chars before persisting to config.
+        if (
+          typeof m.model === "string" &&
+          m.model.length <= 80 &&
+          !/[\u0000-\u001f]/.test(m.model)
+        ) {
           await vscode.workspace
             .getConfiguration("tokopt")
             .update(
@@ -160,7 +167,7 @@ export class TokoptDashboard implements vscode.Disposable {
       const creditModel = credit.model;
       const requestsPerDay = credit.requestsPerDay;
 
-      const [auditOutcome, detectOutcome] = await Promise.all([
+      const [auditOutcome, detectOutcome, modelRows] = await Promise.all([
         runTokoptAudit(
           binaryPath,
           folder.uri.fsPath,
@@ -169,6 +176,12 @@ export class TokoptDashboard implements vscode.Disposable {
           credit.ratesPath
         ),
         runTokoptDetect(binaryPath, folder.uri.fsPath, this.log),
+        runReportByModel(
+          binaryPath,
+          folder.uri.fsPath,
+          this.log,
+          credit.ratesPath
+        ),
       ]);
 
       if (auditOutcome.kind !== "ok") {
@@ -186,6 +199,7 @@ export class TokoptDashboard implements vscode.Disposable {
         requestsPerDay,
         generatedAt: new Date().toISOString(),
         availableModels: credit.available,
+        modelComparison: modelRows,
       });
 
       const nonce = makeNonce();

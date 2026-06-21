@@ -253,3 +253,83 @@ test("modelOptions: keeps a selected value not in the available list", () => {
   const html = modelOptions("custom-model", ["gpt-5.5"]);
   assert.match(html, /value="custom-model"[^>]*selected/);
 });
+
+import { modelComparisonSection } from "./dashboardHtml.js";
+import type { ModelCostRow } from "./bymodel.js";
+
+const compareRows: ModelCostRow[] = [
+  { name: "gpt-5-mini", basis: "catalog", nanoAiuPerInputToken: 25000, alwaysOnNanoAiu: 60_300_000, totalNanoAiu: 209_425_000 },
+  { name: "gpt-5.5", basis: "empirical", nanoAiuPerInputToken: 312500, alwaysOnNanoAiu: 753_750_000, totalNanoAiu: 2_617_812_500 },
+  { name: "claude-opus-4.8", basis: "catalog", nanoAiuPerInputToken: 500000, alwaysOnNanoAiu: 1_206_000_000, totalNanoAiu: 4_188_500_000 },
+];
+
+test("modelComparisonSection: empty rows → omitted entirely", () => {
+  assert.equal(modelComparisonSection([], "gpt-5.5"), "");
+});
+
+test("modelComparisonSection: one bar per model, order preserved, heading present", () => {
+  const html = modelComparisonSection(compareRows, undefined);
+  assert.match(html, /Model cost comparison/);
+  const rowCount = (html.match(/class="bar-row clickable model-row/g) ?? []).length;
+  assert.equal(rowCount, 3);
+  // CLI order preserved (cheapest first).
+  assert.ok(html.indexOf("gpt-5-mini") < html.indexOf("claude-opus-4.8"));
+});
+
+test("modelComparisonSection: widest bar is the most expensive (100%)", () => {
+  const html = modelComparisonSection(compareRows, undefined);
+  // opus-4.8 is the max → 100.0%
+  assert.match(html, /width:100\.0%/);
+});
+
+test("modelComparisonSection: each row carries data-model + basis badge", () => {
+  const html = modelComparisonSection(compareRows, undefined);
+  assert.match(html, /data-model="gpt-5.5"/);
+  assert.match(html, /basis-empirical/);
+  assert.match(html, /basis-catalog/);
+  assert.match(html, /measured</); // empirical badge label
+  assert.match(html, /est\.</);    // catalog badge label
+});
+
+test("modelComparisonSection: selected model is highlighted", () => {
+  const html = modelComparisonSection(compareRows, "gpt-5.5");
+  // The selected row gets the `selected` class on its model-row.
+  assert.match(html, /model-row selected" data-model="gpt-5.5"/);
+});
+
+test("modelComparisonSection: 'none' selection highlights nothing", () => {
+  const html = modelComparisonSection(compareRows, "none");
+  assert.doesNotMatch(html, /model-row selected/);
+});
+
+test("modelComparisonSection: model names are HTML-escaped", () => {
+  const html = modelComparisonSection(
+    [{ name: '<x>&"', basis: "catalog", nanoAiuPerInputToken: 1, alwaysOnNanoAiu: 1, totalNanoAiu: 1 }],
+    undefined
+  );
+  assert.doesNotMatch(html, /data-model="<x>/);
+  assert.match(html, /&lt;x&gt;/);
+});
+
+test("renderDashboardHtml: includes the comparison section + data-model handler when rows present", () => {
+  const data: DashboardData = {
+    root: "/r", encoding: "o200k_base", requestsPerDay: 200, generatedAt: "now",
+    scopes: [{ scope: "always-on", tokens: 100, fileCount: 1 }],
+    topFiles: [], findings: [], totalTokens: 100, toolsTokens: 0,
+    modelComparison: compareRows,
+  };
+  const html = renderDashboardHtml(data, { cspSource: "vscode-resource:", nonce: "n0" });
+  assert.match(html, /Model cost comparison/);
+  assert.match(html, /data-model/);
+  assert.match(html, /selectModel\(/); // the click handler is wired
+});
+
+test("renderDashboardHtml: no comparison section when modelComparison absent (back-compat)", () => {
+  const data: DashboardData = {
+    root: "/r", encoding: "o200k_base", requestsPerDay: 200, generatedAt: "now",
+    scopes: [{ scope: "always-on", tokens: 100, fileCount: 1 }],
+    topFiles: [], findings: [], totalTokens: 100, toolsTokens: 0,
+  };
+  const html = renderDashboardHtml(data, { cspSource: "vscode-resource:", nonce: "n0" });
+  assert.doesNotMatch(html, /Model cost comparison/);
+});

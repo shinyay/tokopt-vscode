@@ -6,6 +6,20 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.13.0] — 2026-06-21
+
+### Added
+
+- **Model cost comparison in the dashboard.** The Optimization Dashboard gains a **"Model cost comparison"** section: one horizontal bar per model showing **this repo's projected always-on AI Credit cost**, ranked cheapest-first, with a `measured`/`est.` **basis badge** and the USD-per-turn equivalent. The currently-selected `tokopt.creditModel` is highlighted, and **clicking any model selects it** (sets `tokopt.creditModel`). Answers "which model is cheapest for *my* config?" at a glance — the visual counterpart of the CLI's `tokopt report --by-model`. Backed by a new `tokopt report --by-model --format json` call.
+
+### Requires
+
+- A tokopt binary with `tokopt report --by-model` (**tokopt CLI ≥ 0.10.0**). Against an older binary the comparison section is **omitted gracefully** — the rest of the dashboard is unaffected. See [COMPATIBILITY.md](COMPATIBILITY.md).
+
+### Internal / quality
+
+- New `src/bymodel.ts`: best-effort `tokopt report --by-model` runner + pure, unit-tested `parseByModelJson()`. New pure `modelComparisonSection()` renderer in `dashboardHtml.ts` (basis badge, selected highlight, `data-model` click-to-select). **14 new unit tests → 87 total**, all green via `node:test`.
+
 ## [0.12.0] — 2026-06-20
 
 ### Added
