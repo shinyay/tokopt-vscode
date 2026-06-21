@@ -340,19 +340,28 @@ files are priced per invocation / per use.
 > estimates from a Copilot-CLI-calibrated rate card; real billing
 > varies with cache hits, output, and reasoning tokens.
 
-### Cost-project any model (custom rate cards)
+### Model picker & cost-projecting any model
 
-The embedded rate card covers four measured models. To estimate cost for
-**any other model you run in VS Code** (Claude Opus 4.8, o3, DeepSeek, …),
-point `tokopt.creditRatesPath` at an external `rate-card.json`:
+The model pickers (Dashboard, Usage Analysis) and the `tokopt.creditModel`
+setting are **populated from your installed tokopt binary** — the extension
+runs `tokopt models` on activation and lists every model the binary's embedded
+rate card can price (**19** with the current card: 4 empirically measured plus
+catalog-derived rates for the rest), so common models like `claude-opus-4.8`,
+`gpt-5.4`, and `claude-haiku-4.5` work out of the box with no extra files.
+
+To cost-project a model the binary doesn't know, point
+`tokopt.creditRatesPath` at an external `rate-card.json`:
 
 ```json
-{ "models": { "claude-opus-4.8": { "rate_status": "ok", "nano_aiu_per_input_token": 500000 } } }
+{ "models": { "my-model": { "rate_status": "ok", "nano_aiu_per_input_token": 500000 } } }
 ```
 
-…then set `tokopt.creditModel` to a model it defines. The in-panel model
-pickers (Dashboard, Usage Analysis) then list that card's models. An
-unknown model degrades to tokens-only.
+…then set `tokopt.creditModel` to a model it defines. An external card
+**overrides** the embedded list in the picker. An unknown model degrades to
+tokens-only.
+
+> Requires a tokopt binary with the `tokopt models` command. Older binaries
+> fall back to a built-in 4-model list.
 
 ---
 
