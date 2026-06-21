@@ -599,6 +599,10 @@ If you run **both** tokopt-skills (CLI) AND tokopt-vscode (user-profile install)
 - **`tokopt` binary** (from Step 1) — required at runtime by every skill, agent, and prompt
 - Linux / macOS / Windows (WSL recommended for the install scripts)
 
+See [COMPATIBILITY.md](COMPATIBILITY.md) for which `tokopt` CLI version each
+feature needs (canonical matrix in the [CLI repo](https://github.com/shinyay/tokopt/blob/main/COMPATIBILITY.md)),
+and [VERSIONING.md](VERSIONING.md) for the SemVer policy and road to 1.0.
+
 ---
 
 ## ⚠️ Known limitations
