@@ -6,6 +6,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.13.1] — 2026-06-21
+
+### Fixed
+
+- **Suppress Quick Fix now inserts at the top of the file** ([#30](https://github.com/shinyay/tokopt-vscode/issues/30)). `<!-- tokopt:disable=<rule-id> -->` was appended to the **end** of the file, far from the offending content; it is now placed at the **very top**, after a YAML front-matter block when one is present. The directive is now predictable and discoverable. Pure helpers `suppressionInsertOffset` / `buildSuppressionInsert` are unit-tested (CRLF + front-matter cases).
+
 ## [0.13.0] — 2026-06-21
 
 ### Added

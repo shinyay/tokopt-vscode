@@ -32,7 +32,7 @@ import {
 } from "./codeActions.js";
 import { SlimPreviewContentProvider } from "./slimPreview.js";
 import { runTokoptSlim } from "./slim.js";
-import { formatSuppressionComment } from "./suppressions.js";
+import { buildSuppressionInsert } from "./suppressions.js";
 
 function resolveBinary(): string {
   const config = vscode.workspace.getConfiguration("tokopt");
@@ -875,9 +875,10 @@ async function previewSlim(
  */
 async function suppressFinding(uri: vscode.Uri, id: string): Promise<void> {
   const doc = await vscode.workspace.openTextDocument(uri);
-  const insertAt = doc.positionAt(doc.getText().length);
+  const { offset, text } = buildSuppressionInsert(doc.getText(), id);
+  const insertAt = doc.positionAt(offset);
   const edit = new vscode.WorkspaceEdit();
-  edit.insert(uri, insertAt, formatSuppressionComment(id));
+  edit.insert(uri, insertAt, text);
   const applied = await vscode.workspace.applyEdit(edit);
   if (!applied) {
     vscode.window.showErrorMessage(
