@@ -30,6 +30,34 @@ export function formatSuppressionComment(id: string): string {
 }
 
 /**
+ * Compute the character offset at which a suppression comment should be
+ * inserted: the very top of the file, but after a YAML front-matter block
+ * (`---\n ... \n---`) when one is present. This keeps the directive
+ * predictable and discoverable instead of appended to the end of the file.
+ * See https://github.com/shinyay/tokopt-vscode/issues/30.
+ */
+export function suppressionInsertOffset(content: string): number {
+  // Front matter must be the very first bytes: an opening `---` line.
+  const fm = /^---\r?\n[\s\S]*?\r?\n---[ \t]*\r?\n/.exec(content);
+  return fm ? fm[0].length : 0;
+}
+
+/**
+ * Build the `{ offset, text }` insertion for a suppression comment so it
+ * lands on its own line at the top of the file (after front matter). The
+ * text is self-contained: it always ends with a newline, and adds a blank
+ * separator before existing body content.
+ */
+export function buildSuppressionInsert(
+  content: string,
+  id: string
+): { offset: number; text: string } {
+  const offset = suppressionInsertOffset(content);
+  const text = `<!-- tokopt:disable=${id} -->\n\n`;
+  return { offset, text };
+}
+
+/**
  * Return true when the file extension supports HTML-comment suppression
  * (i.e. markdown). Path comparison is case-insensitive.
  */
