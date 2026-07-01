@@ -11,6 +11,7 @@ This page only records the extension's own requirement on the CLI.
 
 | `tokopt-vscode` | Requires `tokopt` CLI | Notes |
 |---|---|---|
+| ≥ 0.14.0 | **a tokopt with `--enable-jp-idiom`** for Japanese slim compression | Older CLI → slim detects the "unknown flag", retries without it, and runs as before (Japanese stays at 0% savings) |
 | ≥ 0.13.0 | **≥ 0.10.0** for the model cost comparison (`tokopt report --by-model`) | Older CLI → comparison section omitted; rest of dashboard unaffected |
 | ≥ 0.12.0 | **≥ 0.9.0** for the auto-discovered model picker (`tokopt models`) | Older CLI → falls back to a built-in 4-model list; everything else still works |
 | ≥ 0.11.0 | **≥ 0.8.0** for `--credit-rates` external rate cards | Older CLI → `tokopt.creditRatesPath` ignored |

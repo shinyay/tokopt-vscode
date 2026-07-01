@@ -120,6 +120,12 @@ Every `tokopt` diagnostic now ships with a **lightbulb (Cmd+. / Ctrl+.)** menu s
 | **Suppress `<id>`** | Appends `<!-- tokopt:disable=<id> -->` to the document | Markdown files only |
 | **Learn more about `<id>`** | Opens the [anti-patterns chapter](https://github.com/shinyay/getting-started-with-token-optimization/blob/main/docs/14-anti-patterns-and-pitfalls.md) | Always offered |
 
+### Slimming any markdown — including Japanese
+
+Slim isn't limited to diagnostics. **`tokopt: Preview slim diff for current file`** and **`tokopt: Apply slim suggestion to current file`** are available from the Command Palette whenever a **markdown** editor is active, so you can slim a plain doc that has no finding (previously only diagnostic Quick Fixes and the Token Cost tree could trigger slim).
+
+All slim runs pass **`--enable-jp-idiom`**, so **Japanese files actually compress** (`〜することができます` → `〜できます`, ~15% on idiom-heavy prose) instead of reporting 0 saved tokens. The flag is a no-op on non-Japanese input. A tokopt too old to know the flag is detected and slim retries without it. (`--enable-nexus-ja` particle trimming needs a kagome build and is **not** passed automatically.)
+
 ### Slim-fixable rules (the `SLIM_FIXABLE` allow-list)
 
 Apply / Preview are deliberately offered for **only three** finding IDs:

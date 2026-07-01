@@ -2,6 +2,7 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
 import { warnBinaryMissing } from "./warnings.js";
+import { buildSlimArgs, isUnknownFlagError } from "./slimArgs.js";
 
 const execFileAsync = promisify(execFile);
 
@@ -50,11 +51,33 @@ export async function runTokoptSlim(
   log: vscode.OutputChannel
 ): Promise<SlimOutcome> {
   try {
-    const { stdout } = await execFileAsync(
-      binaryPath,
-      ["slim", "--input", file],
-      { timeout: 30_000, maxBuffer: 8 * 1024 * 1024 }
-    );
+    let stdout: string;
+    try {
+      // Default: enable JpIdiom so Japanese compresses (no-op on other
+      // languages). See issue #45.
+      ({ stdout } = await execFileAsync(
+        binaryPath,
+        buildSlimArgs(file, { jpIdiom: true }),
+        { timeout: 30_000, maxBuffer: 8 * 1024 * 1024 }
+      ));
+    } catch (flagErr) {
+      // Backward compat: a tokopt too old to know --enable-jp-idiom exits
+      // with "unknown flag". Retry without it so slim still works. Every
+      // other failure (ENOENT / timeout / real error) propagates to the
+      // outer handler unchanged.
+      if (!isUnknownFlagError(String(flagErr))) {
+        throw flagErr;
+      }
+      log.appendLine(
+        "tokopt slim: this binary does not support --enable-jp-idiom (Japanese compression); " +
+          "retrying without it. Upgrade tokopt for Japanese slim support."
+      );
+      ({ stdout } = await execFileAsync(
+        binaryPath,
+        buildSlimArgs(file, { jpIdiom: false }),
+        { timeout: 30_000, maxBuffer: 8 * 1024 * 1024 }
+      ));
+    }
 
     const delimIdx = stdout.indexOf(CONTENT_DELIMITER);
     if (delimIdx < 0) {
