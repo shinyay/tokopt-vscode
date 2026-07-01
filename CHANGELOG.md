@@ -6,6 +6,13 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.14.0] — 2026-07-01
+
+### Added
+
+- **Japanese files now compress via slim** ([#45](https://github.com/shinyay/tokopt-vscode/issues/45)). slim invocations (Quick Fix "Apply slim" / "Preview slim diff", the Token Cost tree's "Run tokopt slim", and the new Command Palette entries below) now pass **`--enable-jp-idiom`**, so a Japanese file actually compresses (e.g. `〜することができます` → `〜できます`, ~15% on idiom-heavy text) instead of reporting 0 saved tokens. The flag is a **no-op on non-Japanese input**, so English/other files are unchanged. A tokopt too old to know the flag is detected (cobra "unknown flag") and slim silently **retries without it** — no error is surfaced. `--enable-nexus-ja` is intentionally **not** passed (it needs a kagome build).
+- **"tokopt: Preview slim diff for current file" and "tokopt: Apply slim suggestion to current file" are now in the Command Palette** for any active **markdown** editor. Previously slim was only reachable from a slim-fixable diagnostic's Quick Fix or the Token Cost tree — plain markdown (including Japanese prose docs) had no entry point at all.
+
 ## [0.13.1] — 2026-06-21
 
 ### Fixed
