@@ -6,6 +6,10 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+### Added
+
+- **Basis badge (measured / est.) in the Cost model picker + a caveat for estimate rates** ([#41](https://github.com/shinyay/tokopt-vscode/issues/41)). The "Cost model" dropdown (in both the main dashboard and the Usage Analysis view) now tags each model with its rate **basis** — ` · measured` for an empirically-calibrated rate, ` · est.` for a catalog list-price upper bound — sourced from `tokopt models --format json`. Selecting an `est.` model shows a one-line caveat ("list-price estimate; cache/output not modeled") next to the picker. This mirrors the basis badges already shown in the dashboard's "Model cost comparison" bars. Against a tokopt too old to report `basis`, or when an external `--credit-rates` card is active, the tags/caveat are simply omitted (no regression). `embeddedModels.ts` now retains `basis` alongside the model name; new pure helpers `parseModelsJsonDetailed` / `basisMapFromModels` / `modelBasisCaveat` are unit-tested.
+
 ## [0.15.0] — 2026-07-02
 
 ### Changed

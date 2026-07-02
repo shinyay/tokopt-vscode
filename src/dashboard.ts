@@ -199,6 +199,7 @@ export class TokoptDashboard implements vscode.Disposable {
         requestsPerDay,
         generatedAt: new Date().toISOString(),
         availableModels: credit.available,
+        availableModelsBasis: credit.basisByModel,
         modelComparison: modelRows,
       });
 

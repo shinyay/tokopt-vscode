@@ -1,4 +1,4 @@
-import { escapeHtml, modelOptions } from "./dashboardHtml.js";
+import { escapeHtml, modelOptions, modelBasisCaveat } from "./dashboardHtml.js";
 import {
   formatAiu,
   formatUsd,
@@ -25,6 +25,7 @@ export interface UsageViewData {
   totalNanoAiu?: number;
   creditModel?: string;
   availableModels?: string[];
+  availableModelsBasis?: Record<string, string>;
   generatedAt: string;
 }
 
@@ -165,7 +166,10 @@ export function renderUsageHtml(
     `style-src ${ctx.cspSource} 'unsafe-inline'; script-src 'nonce-${ctx.nonce}';`;
 
   const modelNote = hasCredit
-    ? `Cost model: <strong>${escapeHtml(data.creditModel as string)}</strong> · 1 AIU = $0.01`
+    ? `Cost model: <strong>${escapeHtml(data.creditModel as string)}</strong> · 1 AIU = $0.01${modelBasisCaveat(
+        data.creditModel,
+        data.availableModelsBasis
+      )}`
     : `Set a cost model to project AI Credits / USD.`;
 
   return `<!DOCTYPE html>
@@ -216,7 +220,11 @@ export function renderUsageHtml(
   <div class="subtle">${escapeHtml(data.sourceLabel)} · token-consumption distribution (the same analysis as <code>tokopt tail</code>)</div>
   <div class="toolbar">
     <label for="model">Cost model</label>
-    <select id="model">${modelOptions(data.creditModel, data.availableModels)}</select>
+    <select id="model">${modelOptions(
+      data.creditModel,
+      data.availableModels,
+      data.availableModelsBasis
+    )}</select>
     <button id="refresh">↻ Refresh</button>
     <button id="pick" class="secondary">📂 Pick log file…</button>
     <span class="subtle">${modelNote}</span>

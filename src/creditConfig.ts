@@ -1,7 +1,11 @@
 import * as fs from "node:fs";
 import * as vscode from "vscode";
 import { CREDIT_MODELS, parseRateCardModels } from "./credit.js";
-import { getEmbeddedModels } from "./embeddedModels.js";
+import {
+  basisMapFromModels,
+  getEmbeddedModels,
+  getEmbeddedModelsDetailed,
+} from "./embeddedModels.js";
 
 /**
  * Resolved credit configuration, derived from the user's settings and the
@@ -20,6 +24,12 @@ export interface ResolvedCredit {
   ratesPath?: string;
   /** Model names the active card can project (excludes "none"). */
   available: string[];
+  /**
+   * name→basis ("empirical" | "catalog") for the embedded card's models,
+   * restricted to `available`. Empty when the binary predates `tokopt models`
+   * or an external rate card is active (basis is unknown for those).
+   */
+  basisByModel: Record<string, string>;
   requestsPerDay: number;
 }
 
@@ -61,11 +71,18 @@ export function resolveCredit(
   const model =
     rawModel === "none" || available.includes(rawModel) ? rawModel : "none";
 
+  // Basis is only meaningful for the embedded card. When an external rate card
+  // overrides `available`, its rates don't carry a basis, so annotate nothing.
+  const basisByModel = ratesPath
+    ? {}
+    : basisMapFromModels(getEmbeddedModelsDetailed(), available);
+
   return {
     model,
     // Only pass --credit-rates when a model from the external card is active.
     ratesPath: model !== "none" ? ratesPath : undefined,
     available,
+    basisByModel,
     requestsPerDay,
   };
 }

@@ -8,6 +8,7 @@ import {
   renderDashboardHtml,
   renderPromptAnatomy,
   modelOptions,
+  modelBasisCaveat,
   type DashboardData,
 } from "./dashboardHtml.js";
 import type { AuditResult } from "./audit.js";
@@ -252,6 +253,40 @@ test("modelOptions: uses the supplied available list (external card)", () => {
 test("modelOptions: keeps a selected value not in the available list", () => {
   const html = modelOptions("custom-model", ["gpt-5.5"]);
   assert.match(html, /value="custom-model"[^>]*selected/);
+});
+
+test("modelOptions: annotates options with measured/est. from basis map", () => {
+  const html = modelOptions(
+    "gpt-5.5",
+    ["gpt-5.5", "claude-opus-4.8", "o3"],
+    { "gpt-5.5": "empirical", "claude-opus-4.8": "catalog" }
+  );
+  assert.match(html, /gpt-5.5 · measured/);
+  assert.match(html, /claude-opus-4.8 · est\./);
+  // no basis entry → plain name, no suffix
+  assert.match(html, />o3<\/option>/);
+  // "none" is never annotated
+  assert.match(html, /none \(tokens only\)<\/option>/);
+});
+
+test("modelOptions: omits suffixes when no basis map (old CLI / external card)", () => {
+  const html = modelOptions("gpt-5.5", ["gpt-5.5", "claude-opus-4.8"]);
+  assert.doesNotMatch(html, /measured|est\./);
+});
+
+test("modelBasisCaveat: only for a catalog-basis selection", () => {
+  const basis = { "gpt-5.5": "empirical", "claude-opus-4.8": "catalog" };
+  // catalog → caveat with warning tint
+  const cat = modelBasisCaveat("claude-opus-4.8", basis);
+  assert.match(cat, /list-price estimate; cache\/output not modeled/);
+  assert.match(cat, /--vscode-editorWarning-foreground/);
+  // empirical → nothing
+  assert.equal(modelBasisCaveat("gpt-5.5", basis), "");
+  // none / undefined / unknown-basis → nothing
+  assert.equal(modelBasisCaveat("none", basis), "");
+  assert.equal(modelBasisCaveat(undefined, basis), "");
+  assert.equal(modelBasisCaveat("o3", basis), "");
+  assert.equal(modelBasisCaveat("gpt-5.5", undefined), "");
 });
 
 import { modelComparisonSection } from "./dashboardHtml.js";
