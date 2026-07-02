@@ -2,9 +2,39 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import * as vscode from "vscode";
 import { warnBinaryMissing } from "./warnings.js";
-import { buildSlimArgs, isUnknownFlagError } from "./slimArgs.js";
+import {
+  buildSlimArgs,
+  isUnknownFlagError,
+  parseRecommendedFlags,
+  resolveSlimFlags,
+} from "./slimArgs.js";
 
 const execFileAsync = promisify(execFile);
+
+/**
+ * Probe `slim --format json` to learn which flags the CLI recommends for a
+ * file (#47). JSON output never includes content, so this is cheap. Returns
+ * `ok:false` (→ caller falls back) on any failure, EXCEPT ENOENT which is
+ * re-thrown so the outer handler can surface the binary-missing warning.
+ */
+async function probeRecommendedFlags(
+  binaryPath: string,
+  file: string
+): Promise<{ ok: boolean; flags: string[] }> {
+  try {
+    const { stdout } = await execFileAsync(
+      binaryPath,
+      ["slim", "--input", file, "--format", "json"],
+      { timeout: 30_000, maxBuffer: 8 * 1024 * 1024 }
+    );
+    return { ok: true, flags: parseRecommendedFlags(JSON.parse(stdout)) };
+  } catch (err) {
+    if (isErrnoException(err) && err.code === "ENOENT") {
+      throw err;
+    }
+    return { ok: false, flags: [] };
+  }
+}
 
 /**
  * `tokopt slim --format=json` deliberately omits the compressed content
@@ -51,32 +81,37 @@ export async function runTokoptSlim(
   log: vscode.OutputChannel
 ): Promise<SlimOutcome> {
   try {
+    // Step 1 (probe): ask the CLI which flags it recommends for THIS file via
+    // a cheap `--format json` run (JSON never carries content). We honour its
+    // --enable-* recommendations instead of hardcoding the flag (#47). If the
+    // probe fails or the CLI is too old to emit `recommendations`, we fall
+    // back to --enable-jp-idiom (the #45 behaviour: a no-op on non-Japanese).
+    const recommended = await probeRecommendedFlags(binaryPath, file);
+    const flags = resolveSlimFlags(recommended.flags, {
+      probeSucceeded: recommended.ok,
+    });
+
     let stdout: string;
     try {
-      // Default: enable JpIdiom so Japanese compresses (no-op on other
-      // languages). See issue #45.
-      ({ stdout } = await execFileAsync(
-        binaryPath,
-        buildSlimArgs(file, { jpIdiom: true }),
-        { timeout: 30_000, maxBuffer: 8 * 1024 * 1024 }
-      ));
+      ({ stdout } = await execFileAsync(binaryPath, buildSlimArgs(file, flags), {
+        timeout: 30_000,
+        maxBuffer: 8 * 1024 * 1024,
+      }));
     } catch (flagErr) {
-      // Backward compat: a tokopt too old to know --enable-jp-idiom exits
-      // with "unknown flag". Retry without it so slim still works. Every
-      // other failure (ENOENT / timeout / real error) propagates to the
-      // outer handler unchanged.
+      // Backward compat: a tokopt too old to know a flag exits with
+      // "unknown flag". Retry with no extra flags so slim still works. Every
+      // other failure (ENOENT / timeout / real error) propagates unchanged.
       if (!isUnknownFlagError(String(flagErr))) {
         throw flagErr;
       }
       log.appendLine(
-        "tokopt slim: this binary does not support --enable-jp-idiom (Japanese compression); " +
-          "retrying without it. Upgrade tokopt for Japanese slim support."
+        `tokopt slim: this binary does not support ${flags.join(" ")} ` +
+          "(e.g. Japanese compression); retrying without it. Upgrade tokopt for full support."
       );
-      ({ stdout } = await execFileAsync(
-        binaryPath,
-        buildSlimArgs(file, { jpIdiom: false }),
-        { timeout: 30_000, maxBuffer: 8 * 1024 * 1024 }
-      ));
+      ({ stdout } = await execFileAsync(binaryPath, buildSlimArgs(file, []), {
+        timeout: 30_000,
+        maxBuffer: 8 * 1024 * 1024,
+      }));
     }
 
     const delimIdx = stdout.indexOf(CONTENT_DELIMITER);

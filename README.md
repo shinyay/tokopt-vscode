@@ -124,7 +124,7 @@ Every `tokopt` diagnostic now ships with a **lightbulb (Cmd+. / Ctrl+.)** menu s
 
 Slim isn't limited to diagnostics. **`tokopt: Preview slim diff for current file`** and **`tokopt: Apply slim suggestion to current file`** are available from the Command Palette whenever a **markdown** editor is active, so you can slim a plain doc that has no finding (previously only diagnostic Quick Fixes and the Token Cost tree could trigger slim).
 
-All slim runs pass **`--enable-jp-idiom`**, so **Japanese files actually compress** (`〜することができます` → `〜できます`, ~15% on idiom-heavy prose) instead of reporting 0 saved tokens. The flag is a no-op on non-Japanese input. A tokopt too old to know the flag is detected and slim retries without it. (`--enable-nexus-ja` particle trimming needs a kagome build and is **not** passed automatically.)
+Slim follows the CLI's **flag recommendations**: it makes a cheap `--format json` probe, reads the `recommendations` array, and runs slim with the recommended `--enable-*` flags — so **Japanese files actually compress** (`〜することができます` → `〜できます`, ~15% on idiom-heavy prose) instead of reporting 0 saved tokens. This future-proofs per-language compression without an extension release. `--profile` recommendations are not auto-applied. Against an older tokopt that doesn't emit `recommendations`, or if the probe fails, slim falls back to `--enable-jp-idiom` (a no-op on non-Japanese). (`--enable-nexus-ja` particle trimming needs a kagome build and is **not** passed automatically.)
 
 ### Slim-fixable rules (the `SLIM_FIXABLE` allow-list)
 

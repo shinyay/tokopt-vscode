@@ -2,7 +2,7 @@
   "name": "tokopt-vscode",
   "displayName": "tokopt — Token Optimization for Copilot",
   "description": "Token-cost CodeLens + anti-pattern Diagnostics + Quick Fix + Status bar (always-on tax) + Token Cost TreeView for Copilot customization files (instructions, agents, skills).",
-  "version": "0.14.0",
+  "version": "0.15.0",
   "publisher": "shinyay",
   "license": "MIT",
   "repository": {
