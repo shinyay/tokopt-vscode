@@ -60,6 +60,8 @@ export interface DashboardData {
   totalNanoAiu?: number;
   /** Models the active rate card can project (for the in-panel dropdown). */
   availableModels?: string[];
+  /** name→basis for `availableModels` (measured/est. picker annotation). */
+  availableModelsBasis?: Record<string, string>;
   /** Per-model cost ranking from `tokopt report --by-model` (cheapest first). */
   modelComparison?: ModelCostRow[];
 }
@@ -121,6 +123,7 @@ export function buildDashboardData(
     generatedAt: string;
     topFileLimit?: number;
     availableModels?: string[];
+    availableModelsBasis?: Record<string, string>;
     modelComparison?: ModelCostRow[];
   }
 ): DashboardData {
@@ -196,6 +199,7 @@ export function buildDashboardData(
     alwaysOnNanoAiu: credit?.alwaysOnNanoAiu,
     totalNanoAiu: credit?.totalNanoAiu,
     availableModels: opts.availableModels,
+    availableModelsBasis: opts.availableModelsBasis,
     modelComparison: opts.modelComparison,
   };
 }
@@ -434,7 +438,8 @@ export function modelComparisonSection(
  */
 export function modelOptions(
   selected: string | undefined,
-  available?: string[]
+  available?: string[],
+  basisByModel?: Record<string, string>
 ): string {
   const base = available && available.length > 0 ? available : DEFAULT_MODELS;
   const sel = selected && selected !== "" ? selected : "none";
@@ -443,13 +448,56 @@ export function modelOptions(
     models.push(sel);
   }
   return models
-    .map(
-      (m) =>
-        `<option value="${escapeHtml(m)}"${
-          m === sel ? " selected" : ""
-        }>${escapeHtml(m === "none" ? "none (tokens only)" : m)}</option>`
-    )
+    .map((m) => {
+      const label =
+        m === "none" ? "none (tokens only)" : `${m}${basisSuffix(m, basisByModel)}`;
+      return `<option value="${escapeHtml(m)}"${
+        m === sel ? " selected" : ""
+      }>${escapeHtml(label)}</option>`;
+    })
     .join("");
+}
+
+/**
+ * The measured/est. tag appended to a model's dropdown label, based on its
+ * rate basis. `<option>`s can't carry a colored badge like the comparison bars,
+ * so the trustworthiness is surfaced as plain text with the same vocabulary.
+ * Returns "" when the basis is unknown (old CLI / external rate card).
+ */
+function basisSuffix(
+  model: string,
+  basisByModel?: Record<string, string>
+): string {
+  const basis = basisByModel?.[model];
+  if (basis === "empirical") {
+    return " · measured";
+  }
+  if (basis === "catalog") {
+    return " · est.";
+  }
+  return "";
+}
+
+/**
+ * A one-line caveat shown next to the picker when the selected model's rate is
+ * a catalog list-price estimate rather than a measured rate. Tinted via an
+ * inline warning color (CSP allows inline styles). Returns "" for measured /
+ * "none" / unknown-basis selections so nothing is shown unless it matters.
+ */
+export function modelBasisCaveat(
+  selected: string | undefined,
+  basisByModel?: Record<string, string>
+): string {
+  if (!selected || selected === "none") {
+    return "";
+  }
+  if (basisByModel?.[selected] !== "catalog") {
+    return "";
+  }
+  return (
+    ` · <span style="color:var(--vscode-editorWarning-foreground)">` +
+    `⚠ list-price estimate; cache/output not modeled</span>`
+  );
 }
 
 /** Total estimated savings across findings. */
@@ -675,7 +723,10 @@ export function renderDashboardHtml(
   const modelNote = hasCredit
     ? `Cost model: <strong>${escapeHtml(
         data.creditModel as string
-      )}</strong> · 1 AIU = $0.01 · monthly assumes ${data.requestsPerDay.toLocaleString()} req/day`
+      )}</strong> · 1 AIU = $0.01 · monthly assumes ${data.requestsPerDay.toLocaleString()} req/day${modelBasisCaveat(
+        data.creditModel,
+        data.availableModelsBasis
+      )}`
     : `Set a cost model to project AI Credits / USD.`;
 
   // ---- Model cost comparison (from `tokopt report --by-model`) ----
@@ -787,7 +838,11 @@ export function renderDashboardHtml(
   )}</div>
   <div class="toolbar">
     <label for="model">Cost model</label>
-    <select id="model">${modelOptions(data.creditModel, data.availableModels)}</select>
+    <select id="model">${modelOptions(
+      data.creditModel,
+      data.availableModels,
+      data.availableModelsBasis
+    )}</select>
     <label for="rpd">Requests/day</label>
     <input id="rpd" type="number" min="0" value="${data.requestsPerDay}" />
     <button id="refresh">↻ Refresh</button>

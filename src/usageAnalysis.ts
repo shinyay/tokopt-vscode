@@ -130,7 +130,12 @@ export class UsageAnalysisPanel implements vscode.Disposable {
       const nonce = makeNonce();
       if (rows.length === 0) {
         this.panel.webview.html = renderUsageHtml(
-          this.emptyData(sourceLabel, creditModel, credit.available),
+          this.emptyData(
+            sourceLabel,
+            creditModel,
+            credit.available,
+            credit.basisByModel
+          ),
           { cspSource: this.panel.webview.cspSource, nonce }
         );
         return;
@@ -198,6 +203,7 @@ export class UsageAnalysisPanel implements vscode.Disposable {
         totalNanoAiu: totalNanoAiu > 0 ? totalNanoAiu : undefined,
         creditModel: creditModel === "none" ? undefined : creditModel,
         availableModels: credit.available,
+        availableModelsBasis: credit.basisByModel,
         generatedAt: new Date().toISOString(),
       };
       this.panel.webview.html = renderUsageHtml(data, {
@@ -219,7 +225,8 @@ export class UsageAnalysisPanel implements vscode.Disposable {
   private emptyData(
     sourceLabel: string,
     creditModel: string,
-    available: string[]
+    available: string[],
+    basisByModel: Record<string, string>
   ): UsageViewData {
     return {
       sourceLabel,
@@ -229,6 +236,7 @@ export class UsageAnalysisPanel implements vscode.Disposable {
       outliers: [],
       creditModel: creditModel === "none" ? undefined : creditModel,
       availableModels: available,
+      availableModelsBasis: basisByModel,
       generatedAt: new Date().toISOString(),
     };
   }
