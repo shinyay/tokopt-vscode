@@ -6,6 +6,12 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.15.0] — 2026-07-02
+
+### Changed
+
+- **slim now follows the CLI's flag recommendations instead of hardcoding `--enable-jp-idiom`** ([#47](https://github.com/shinyay/tokopt-vscode/issues/47)). Before running slim, the extension makes a cheap `--format json` **probe** and reads the CLI's `recommendations` array (getting-started gs#175 item 4 / gs#184), then runs slim with the recommended `--enable-*` flags. This future-proofs Japanese (and any new per-language) compression without an extension release. `--profile` recommendations are intentionally **not** auto-applied (a profile changes the apply/preview contract). Against a tokopt too old to emit `recommendations`, or if the probe fails, the extension **falls back to `--enable-jp-idiom`** (the v0.14.0 behaviour — a no-op on non-Japanese), so there is no regression. `buildSlimArgs` was generalised to take an explicit flag list; new pure helpers `parseRecommendedFlags` / `resolveSlimFlags` are unit-tested.
+
 ## [0.14.0] — 2026-07-01
 
 ### Added
