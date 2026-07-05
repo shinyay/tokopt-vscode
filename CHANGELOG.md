@@ -6,8 +6,11 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.16.0] — 2026-07-05
+
 ### Added
 
+- **Preview slim for YAML and JSON editors** ([#50](https://github.com/shinyay/tokopt-vscode/issues/50)). tokopt CLI v0.15.0 converts YAML/JSON to the compact TOON representation via `slim`, but the extension only offered slim on markdown editors. The **"tokopt: Preview slim diff for current file"** command now also appears for `.yaml`/`.yml`/`.json`/`.jsonc` editors, opening a read-only diff that surfaces the token savings. **Apply (in-place overwrite) is deliberately withheld for YAML/JSON** — slim converts them to TOON, a different representation, so overwriting would leave the file no longer valid YAML/JSON and break any tool that consumes it as config (Kubernetes, GitHub Actions, MCP configs). Apply stays markdown-only; attempting it on YAML/JSON points the user to Preview. A new pure `slimTargets.ts` (`slimCapabilityFor` → `apply`/`preview`/`none`) makes this decision testable and single-sources the markdown-family languageId list; config-format extensions are **always** preview-only, even under a manual `markdown` language override, because the CLI routes by extension.
 - **Basis badge (measured / est.) in the Cost model picker + a caveat for estimate rates** ([#41](https://github.com/shinyay/tokopt-vscode/issues/41)). The "Cost model" dropdown (in both the main dashboard and the Usage Analysis view) now tags each model with its rate **basis** — ` · measured` for an empirically-calibrated rate, ` · est.` for a catalog list-price upper bound — sourced from `tokopt models --format json`. Selecting an `est.` model shows a one-line caveat ("list-price estimate; cache/output not modeled") next to the picker. This mirrors the basis badges already shown in the dashboard's "Model cost comparison" bars. Against a tokopt too old to report `basis`, or when an external `--credit-rates` card is active, the tags/caveat are simply omitted (no regression). `embeddedModels.ts` now retains `basis` alongside the model name; new pure helpers `parseModelsJsonDetailed` / `basisMapFromModels` / `modelBasisCaveat` are unit-tested.
 
 ## [0.15.0] — 2026-07-02
