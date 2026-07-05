@@ -245,7 +245,7 @@
         },
         {
           "command": "tokopt.previewSlim",
-          "when": "editorLangId == markdown"
+          "when": "editorLangId == markdown || editorLangId == yaml || editorLangId == json || editorLangId == jsonc"
         },
         {
           "command": "tokopt.suppressFinding",
