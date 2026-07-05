@@ -32,6 +32,11 @@ import {
 } from "./codeActions.js";
 import { SlimPreviewContentProvider } from "./slimPreview.js";
 import { runTokoptSlim } from "./slim.js";
+import {
+  MARKDOWN_FAMILY_LANG_IDS,
+  canApplySlim,
+  canPreviewSlim,
+} from "./slimTargets.js";
 import { buildSuppressionInsert } from "./suppressions.js";
 
 function resolveBinary(): string {
@@ -40,74 +45,20 @@ function resolveBinary(): string {
 }
 
 /**
- * Markdown-family languageIds that hold Copilot customization prose.
+ * `DocumentFilter[]` for the markdown-family languageIds that hold Copilot
+ * customization prose, used to register the CodeLens / CodeAction providers.
  *
- * VS Code Insiders 1.117+ and the official `github.copilot-chat` extension
- * register dedicated languageIds for these filename patterns:
- *   - `agent`        → `*.agent.md` (legacy)
- *   - `chatagent`    → `*.agent.md` AND `*.chatmode.md` (current — GH Copilot
- *                       Chat 1.125+ uses this internal id; "Agent" is the
- *                       display name only — see #28 and #29)
- *   - `instructions` → `copilot-instructions.md`, `instructions.md`
- *   - `chatmode`     → `*.chatmode.md` (legacy — being deprecated by GH
- *                       Copilot Chat to `chatagent`)
- *   - `prompt`       → `*.prompt.md`              (added in v0.6.5, #26)
- *   - `skill`        → `SKILL.md`                 (added in v0.6.5, #27)
+ * The languageId list itself is single-sourced in slimTargets.ts
+ * (`MARKDOWN_FAMILY_LANG_IDS`) so provider coverage and the slim capability
+ * check (`slimCapabilityFor`) cannot drift apart. See the doc comment there
+ * for the per-id rationale (issues #18 / #26 / #27 / #28 / #29).
  *
- * Providers that previously matched `language: "markdown"` only would
- * silently fail on the exact files this extension is most valuable for.
- * See:
- *   - https://github.com/shinyay/tokopt-vscode/issues/18 (instructions/agent)
- *   - https://github.com/shinyay/tokopt-vscode/issues/26 (prompt)
- *   - https://github.com/shinyay/tokopt-vscode/issues/27 (skill)
- *   - https://github.com/shinyay/tokopt-vscode/issues/28 (chatagent vs agent —
- *                       the GH Copilot Chat extension exposes display name
- *                       "Agent" but internal id `chatagent`, which a naive
- *                       inspector cannot see without clicking through
- *                       Select Language Mode)
- *   - https://github.com/shinyay/tokopt-vscode/issues/29 (chatmode→agent
- *                       deprecation: `*.chatmode.md` now also gets
- *                       `chatagent` languageId via the same registration)
- *
- * On older VS Code versions these languageIds are not registered, and
- * the entries are simply unused (no negative effect on coverage because
- * `markdown` still matches everything as a fallback there).
+ * On older VS Code versions the dedicated ids are not registered and the
+ * entries are simply unused — `markdown` (plus the `.md`/`.markdown`
+ * extension fallback in slimTargets.ts) still matches everything.
  */
-const COPILOT_CUSTOMIZATION_LANGS: readonly vscode.DocumentFilter[] = [
-  { language: "markdown", scheme: "file" },
-  { language: "agent", scheme: "file" },
-  { language: "chatagent", scheme: "file" },
-  { language: "instructions", scheme: "file" },
-  { language: "chatmode", scheme: "file" },
-  { language: "prompt", scheme: "file" },
-  { language: "skill", scheme: "file" },
-];
-
-const COPILOT_CUSTOMIZATION_LANG_IDS: ReadonlySet<string> = new Set(
-  COPILOT_CUSTOMIZATION_LANGS.map((f) => f.language as string)
-);
-
-/**
- * Defense-in-depth check matching the SLIM_FIXABLE allow-list semantics.
- * The CodeActionProvider only offers Apply/Preview when a SLIM_FIXABLE
- * diagnostic is present (all 3 of which target markdown). This guard
- * makes the same constraint hold for any programmatic invocation of
- * `tokopt.applySlim` / `tokopt.previewSlim` (e.g. keybinding, another
- * extension calling executeCommand) so that a JSON / YAML MCP config
- * cannot be silently rewritten through TonForm.
- *
- * Accepts the four markdown-family languageIds because Copilot
- * customization files (`*.agent.md`, `copilot-instructions.md`,
- * `*.chatmode.md`) are markdown-on-disk; the slim pipeline already
- * routes them safely via path-based emphasis detection.
- */
-function isSlimSafeTarget(doc: vscode.TextDocument): boolean {
-  if (COPILOT_CUSTOMIZATION_LANG_IDS.has(doc.languageId)) {
-    return true;
-  }
-  const lower = doc.uri.fsPath.toLowerCase();
-  return lower.endsWith(".md") || lower.endsWith(".markdown");
-}
+const COPILOT_CUSTOMIZATION_LANGS: readonly vscode.DocumentFilter[] =
+  MARKDOWN_FAMILY_LANG_IDS.map((language) => ({ language, scheme: "file" }));
 
 /**
  * Per-URI in-flight tracker for applySlim/previewSlim. A second click on
@@ -736,9 +687,16 @@ async function applySlim(
     return;
   }
   const doc = await vscode.workspace.openTextDocument(uri);
-  if (!isSlimSafeTarget(doc)) {
+  if (!canApplySlim(doc.languageId, doc.uri.fsPath)) {
+    // YAML/JSON are preview-only: slim converts them to TOON (a different
+    // representation), so an in-place overwrite would leave the file no longer
+    // valid YAML/JSON and break any tool that consumes it as config. Point the
+    // user at Preview, which surfaces the savings without overwriting.
+    const canPreview = canPreviewSlim(doc.languageId, doc.uri.fsPath);
     vscode.window.showWarningMessage(
-      `tokopt slim only operates on markdown files. ${doc.languageId} files are not slim-safe (would route through TonForm and may break valid config).`
+      canPreview
+        ? `tokopt: Apply slim is markdown-only. For ${doc.languageId} files, use "tokopt: Preview slim diff" to measure the TOON savings — applying would convert the file to TOON and break its validity as ${doc.languageId}.`
+        : `tokopt slim only operates on markdown, YAML, and JSON files. ${doc.languageId} files are not slim targets.`
     );
     return;
   }
@@ -819,9 +777,9 @@ async function previewSlim(
     return;
   }
   const doc = await vscode.workspace.openTextDocument(uri);
-  if (!isSlimSafeTarget(doc)) {
+  if (!canPreviewSlim(doc.languageId, doc.uri.fsPath)) {
     vscode.window.showWarningMessage(
-      `tokopt slim only operates on markdown files. ${doc.languageId} files are not slim-safe (would route through TonForm and may break valid config).`
+      `tokopt slim previews markdown, YAML, and JSON files. ${doc.languageId} files are not slim targets.`
     );
     return;
   }
