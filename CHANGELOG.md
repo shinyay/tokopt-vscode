@@ -6,6 +6,17 @@ this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ## [Unreleased]
 
+## [0.16.1] — 2026-07-14
+
+### Changed
+
+- **Compatibility documentation now tracks the coordinated Trust Restoration
+  release.** The extension is documented against tokopt CLI v0.18.0 and the
+  canonical ecosystem matrix now lists tokopt-vscode v0.16.1. Runtime behavior
+  is unchanged: Markdown remains apply-capable, while YAML/JSON remains
+  preview-only so structured source files are never overwritten with another
+  representation.
+
 ## [0.16.0] — 2026-07-05
 
 ### Added
