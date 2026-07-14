@@ -7,15 +7,19 @@ the CLI repo and is the single source of truth:
 
 This page only records the extension's own requirement on the CLI.
 
+Current releases: **tokopt-vscode 0.16.1** and **tokopt CLI 0.18.0**.
+
 ## Extension → required tokopt CLI
 
 | `tokopt-vscode` | Requires `tokopt` CLI | Notes |
 |---|---|---|
+| ≥ 0.16.0 | **≥ 0.15.0** for YAML/JSON slim preview | Older CLI → YAML/JSON preview unavailable; Markdown slim remains available |
+| ≥ 0.15.0 | **≥ 0.12.0** for machine-readable slim flag recommendations | Older CLI → extension falls back to its legacy Japanese-flag behavior |
 | ≥ 0.14.0 | **a tokopt with `--enable-jp-idiom`** for Japanese slim compression | Older CLI → slim detects the "unknown flag", retries without it, and runs as before (Japanese stays at 0% savings) |
 | ≥ 0.13.0 | **≥ 0.10.0** for the model cost comparison (`tokopt report --by-model`) | Older CLI → comparison section omitted; rest of dashboard unaffected |
 | ≥ 0.12.0 | **≥ 0.9.0** for the auto-discovered model picker (`tokopt models`) | Older CLI → falls back to a built-in 4-model list; everything else still works |
 | ≥ 0.11.0 | **≥ 0.8.0** for `--credit-rates` external rate cards | Older CLI → `tokopt.creditRatesPath` ignored |
-| any | **≥ 0.7.0** baseline (`audit` / `count` / `detect` / `slim`) | — |
+| any current release | **≥ 0.7.0** baseline (`audit` / `count` / `detect` / `slim`) | Optional features degrade as listed above |
 
 The extension **degrades gracefully** against an older binary — a mismatch
 loses one feature, never the whole tool. Configure the binary with
